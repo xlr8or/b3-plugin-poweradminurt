@@ -134,9 +134,11 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
   _ncronTab = None
   _tcronTab = None
   _scronTab = None
+  _skcronTab = None
   _ninterval = 0
   _tinterval = 0
   _sinterval = 0
+  _skinterval = 0
   _teamred = 0
   _teamblue = 0
   _teamdiff = 0
@@ -227,6 +229,7 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     self.registerEvent(b3.events.EVT_CLIENT_NAME_CHANGE)
     self.registerEvent(b3.events.EVT_CLIENT_KILL)
     self.registerEvent(b3.events.EVT_CLIENT_KILL_TEAM)
+    self.registerEvent(b3.events.EVT_CLIENT_ACTION)
 
     # don't run cron-checks on startup
     self.ignoreSet(self._ignorePlus)
@@ -263,6 +266,7 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     self.LoadTeamBalancer()
     self.LoadVoteDelayer()
     self.LoadSpecChecker()
+    self.LoadSkillBalancer()
     self.LoadMoonMode()
     self.LoadPublicMode()
     self.LoadMatchMode()
@@ -380,7 +384,36 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     try:
       self._ignorePlus = self.config.getint('teambalancer','timedelay')
     except:
-      self.debug('Using default value (%s) for timedelay', self._ignorePlus)      
+      self.debug('Using default value (%s) for timedelay', self._ignorePlus)     
+
+  def LoadSkillBalancer(self):
+    # SKILLBALANCER SETUP
+    try:
+      self._skinterval = self.config.getint('skillbalancer', 'interval')
+    except:
+      self._skinterval = 0
+      self.debug('Using default value (%s) for Skillbalancer Interval', self._skinterval)
+    
+    # set a max interval for skillchecker
+    if self._skinterval > 59:
+      self._skinterval = 59
+    
+    try:
+      self._skilldiff = self.config.getint('skillbalancer', 'tcdifference')
+    except:
+      self._skilldiff = 3
+      self.debug('Using default value (%s) for skilldiff', self._skilldiff)
+    # set a minimum/maximum teamdifference
+    if self._skilldiff < 1:
+      self._skilldiff = 1
+    if self._skilldiff > 9:
+      self._skilldiff = 9
+    
+    try:
+      self._skill_balance_mode = self.config.getint('skillbalancer', 'mode')
+    except:
+      self._skill_balance_mode = 0
+      self.debug('Using default value (%s) for skill_balance_mode', self._skill_balance_mode)
 
   def LoadVoteDelayer(self):
     #VOTEDELAYER SETUP
@@ -675,6 +708,9 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     if self._scronTab:
       # remove existing crontab
       self.console.cron - self._scronTab
+    if self._skcronTab:
+      # remove existing crontab
+      self.console.cron - self._skcronTab
     if self._ninterval > 0:
       self._ncronTab = b3.cron.PluginCronTab(self, self.namecheck, 0, '*/%s' % (self._ninterval))
       self.console.cron + self._ncronTab
@@ -684,7 +720,9 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     if self._sinterval > 0:
       self._scronTab = b3.cron.PluginCronTab(self, self.speccheck, 0, '*/%s' % (self._sinterval))
       self.console.cron + self._scronTab
-
+    if self._skinterval > 0:
+      self._skcronTab = b3.cron.PluginCronTab(self, self.skillcheck, 0, '*/%s' % (self._skinterval))
+      self.console.cron + self._skcronTab
 
   def getCmd(self, cmd):
     cmd = 'cmd_%s' % cmd
@@ -736,6 +774,7 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
         self.debug('Starting RecountPlayers Timer: %s seconds' % (time))
         t2.start()
     elif event.type == b3.events.EVT_GAME_ROUND_START:
+      self._forgetTeamContrib()
       # check for botsupport
       if self._botenable:
         self.botsdisable()
@@ -764,45 +803,116 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
       self.onKill(event.client, event.target, int(event.data[0]))
     elif event.type == b3.events.EVT_CLIENT_KILL_TEAM:
       self.onKillTeam(event.client, event.target, int(event.data[0]))
+    elif event.type == b3.events.EVT_CLIENT_ACTION:
+       self.onAction(event.client, event.data)
     else:
       self.dumpEvent(event)
 
   def onKill(self, killer, victim, points):
     killer.var(self, 'kills', 0).value  += 1
     victim.var(self, 'deaths', 0).value += 1
+    now = time.time()
+    killer.var(self, 'teamcontribhist', []).value.append((now, 1))
+    victim.var(self, 'teamcontribhist', []).value.append((now, -1))
     
   def onTeamKill(self, killer, victim, points):
     killer.var(self, 'teamkills', 0).value += 1
-    
+
+  def onAction(self, client, actiontype):
+    if actiontype in ('flag_captured', 'flag_dropped', 'flag_returned', 'bomb_planted', 'bomb_defused'):
+      client.var(self, actiontype, 0).value += 1
+    if actiontype in ('team_CTF_redflag', 'team_CTF_blueflag'):
+      client.var(self, 'flag_taken', 0).value += 1
+
   def dumpEvent(self, event):
     self.debug('poweradminurt.dumpEvent -- Type %s, Client %s, Target %s, Data %s',
       event.type, event.client, event.target, event.data)
 
+  def _teamvar(self, client, var):
+      # return how much variable has changed since player joined its team
+      old = client.var(self, 'prev_' + var, 0).value
+      new = client.var(self, var, 0).value 
+      return new-old
+
   def _getScores(self, clients):
-    scores = {}
     xlrstats = self.console.getPlugin('xlrstats')
+    playerstats = {}
+    maxstats = {}
+    minstats = {}
+    keys = 'hsratio', 'killratio', 'teamcontrib', 'xhsratio', 'xkillratio', 'flagperf', 'bombperf'
     for c in clients:
       if not c.isvar(self, 'teamtime'):
           c.setvar(self, 'teamtime', self.console.time())
       age = (self.console.time() - c.var(self, 'teamtime', 0).value)/60.0
-      kills = max(0, c.var(self, 'kills', 0).value)
-      deaths = max(0, c.var(self, 'deaths', 0).value)
-      teamkills = max(0, c.var(self, 'teamkills', 0).value)
-      hs = c.var(self, 'headhits', 0).value + c.var(self, 'helmethits', 0).value
-      T = min(1.0, age/5.0) # reduce score for players who just joined
-      hsratio = T*min(1.0, hs/(1.0+kills)) # hs can be greater than kills
-      score = T*kills/(1.0+deaths+teamkills) + T*(kills-deaths-teamkills)/(age+1.0)
-      if xlrstats:
-        stats = xlrstats.get_PlayerStats(c)
-        if stats:
-          head = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=0).kills
-          helmet = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=1).kills
-          xhsratio = min(1.0, (head + helmet)/(1.0+kills))
-          score += 0.5*hsratio + 0.5*xhsratio + stats.ratio
-        else:
-          score += hsratio + 0.8
+      kills = max(0, self._teamvar(c, 'kills'))
+      deaths = max(0, self._teamvar(c, 'deaths'))
+      teamkills = max(0, self._teamvar(c, 'teamkills'))
+      hs = self._teamvar(c, 'headhits') + self._teamvar(c, 'helmethits')
+      hsratio = min(1.0, hs/(1.0+kills)) # hs can be greater than kills
+      killratio = kills/(1.0+deaths+teamkills) 
+      teamcontrib = (kills-deaths-teamkills)/(age+1.0)
+      flag_taken = int(bool(c.var(self, 'flag_taken', 0).value)) # one-time bonus
+      flag_captured = self._teamvar(c, 'flag_captured')
+      flag_returned = self._teamvar(c, 'flag_returned')
+      flagperf = (flag_taken + 5*flag_captured + flag_returned)/(age+1.0)
+      bomb_planted = self._teamvar(c, 'bomb_planted')
+      bomb_defused = self._teamvar(c, 'bomb_defused')
+      bombperf = (bomb_planted + bomb_defused)/(age+1.0)
+
+      playerstats[c.id] = {
+        'age' : age,
+        'hsratio' : hsratio,
+        'killratio' : killratio,
+        'teamcontrib' : teamcontrib,
+        'flagperf' : flagperf,
+        'bombperf' : bombperf,
+      }
+      stats = xlrstats and xlrstats.get_PlayerStats(c)
+      if stats:
+        playerstats[c.id]['xkillratio'] = stats.ratio
+        head = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=0).kills
+        helmet = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=1).kills
+        xhsratio = min(1.0, (head + helmet)/(1.0+kills))
+        playerstats[c.id]['xhsratio'] = xhsratio
       else:
-        score += hsratio + 0.8
+        playerstats[c.id]['xhsratio'] = 0.0
+        playerstats[c.id]['xkillratio'] = 0.8
+      for key in keys:
+        if key not in maxstats or maxstats[key] < playerstats[c.id][key]:
+          maxstats[key] = playerstats[c.id][key]
+        if key not in minstats or minstats[key] > playerstats[c.id][key]:
+          minstats[key] = playerstats[c.id][key]
+    scores = {}
+    weights = {
+      'killratio' : 1.0,
+      'teamcontrib' : 0.5,
+      'hsratio' : 0.3,
+      'xkillratio' : 1.0,
+      'xhsratio' : 0.5,
+      # weight score for mission objectives higher
+      'flagperf' : 2.0,
+      'bombperf' : 2.0,
+    }
+    weightsum = sum(weights[key] for key in keys)
+    self.debug("score: maxstats=%s" % maxstats)
+    self.debug("score: minstats=%s" % minstats)
+    for c in clients:
+      score = 0.0
+      T = min(1.0, playerstats[c.id]['age']/5.0) # reduce score for players who just joined
+      msg = []
+      for key in keys:
+        denom = maxstats[key]-minstats[key]
+        if denom < 0.0001: # accurate at ne nimis
+          continue
+        msg.append("%s=%.3f" % (key, playerstats[c.id][key]))
+        keyscore = weights[key]*(playerstats[c.id][key]-minstats[key])/denom
+        if key in ('killratio', 'teamcontrib', 'hsratio'):
+          score += T*keyscore
+        else:
+          score += keyscore
+      score /= weightsum
+      self.debug('score: %s %s score=%.3f age=%.2f %s' % (c.team, c.name, score,
+        playerstats[c.id]['age'], ' '.join(msg)))
       scores[c.id] = score
     return scores
 
@@ -835,23 +945,58 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     redscore = self._getTeamScore(red, scores)
     return bluescore-redscore
     
-  def cmd_pabalance(self, data, client, cmd=None):
+  def cmd_paadvise(self, data, client, cmd=None):
     """\
-    Report team skill balance.
+    Report team skill balance, and give advice if teams are unfair
     """
     clients = self.console.clients.getList()
     scores = self._getScores(clients)
     blue = [ c for c in clients if c.team == b3.TEAM_BLUE ]
     red = [ c for c in clients if c.team == b3.TEAM_RED ]
+    self.debug("advise: numblue=%d numred=%d" % (len(blue), len(red)))
     diff = self._getTeamScoreDiff(blue, red, scores)
-    team = diff < 0 and 'red' or 'blue'
-    self.console.write('^4Team skill difference is ^1%.2f (%s is stronger)' % (
-      diff, team))
+    bs, rs = self._getRecentTeamContrib(blue, red)
+    tcdiff = bs-rs
+    self.debug('advise: blue=%.2f red=%.2f tcdiff=%.2f' % (bs, rs, tcdiff))
+    # Difference in Average Team Contribution Per Minute
+    self.console.write('DATCPM is %.2f, skill diff is %.2f' % \
+      (tcdiff, diff))
+    self._advise(tcdiff, 1, 1, 0)
       
+  def _getRecentTeamContrib(self, blue, red):
+    if not blue or not red:
+      return 0.0, 0.0
+    recentcontrib = {}
+    T = 2.0 # minutes
+    t0 = time.time() - T*60
+    for c in blue + red:
+        hist = c.var(self, 'teamcontribhist', []).value
+        contrib = 0
+        for t, s in hist:
+          if t0 < t:
+            contrib += s
+        recentcontrib[c.id] = contrib
+    self.debug('recent: %s' % recentcontrib)
+    def contribcmp(a, b):
+       return cmp(recentcontrib[b.id], recentcontrib[a.id])
+    blue = sorted(blue, cmp=contribcmp)
+    red = sorted(red, cmp=contribcmp)
+    n = max(1, min(len(blue)/2, len(red)/2))
+    bs = float(sum(recentcontrib[c.id] for c in blue[:n]))/n/T
+    rs = float(sum(recentcontrib[c.id] for c in red[:n]))/n/T
+    self.debug('recent: n=%d %.2f %.2f' % (n, bs, rs))
+    return bs, rs
+
+  def _forgetTeamContrib(self):
+    clients = self.console.clients.getList()
+    for c in clients:
+      c.setvar(self, 'teamcontribhist', [])
+
   def cmd_paunskuffle(self, data, client, cmd=None):
     """\
-    Create unbalanced teams. Used to test !paskuffle and !paminmoves.
+    Create unbalanced teams. Used to test !paskuffle and !pabalance.
     """
+    self._balancing = True
     clients = self.console.clients.getList()
     scores = self._getScores(clients)
     decorated = [ (scores.get(c.id, 0), c) for c in clients 
@@ -863,45 +1008,54 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     red = players[n:]
     self.console.write('bigtext "Unskuffling! Noobs beware!"')
     self._move(blue, red)
+    self._forgetTeamContrib()
+    self._balancing = False
 
-  def cmd_paskuffle(self, data, client, cmd=None):
+  def cmd_paskuffle(self, data=None, client=None, cmd=None):
     """\
     Skill shuffle. Shuffle players to balanced teams by numbers and skill.
     Locked players are also moved.
     """
-    clients = self.console.clients.getList()
-    scores = self._getScores(clients)
-    oldblue = [ c for c in clients if c.team == b3.TEAM_BLUE ]
-    oldred = [ c for c in clients if c.team == b3.TEAM_RED ]
-    olddiff = self._getTeamScoreDiff(oldblue, oldred, scores)
-    bestdiff = bestsniperdiff = bestblue = bestred = None
-    # randomize teams a few times and pick the most balanced
-    slack = 0.4
-    for _ in xrange(100):
-      blue, red = self._getRandomTeams(clients)
-      diff = self._getTeamScoreDiff(blue, red, scores)
-      sniperdiff = abs(self._countSnipers(blue) - self._countSnipers(red))
-      if bestdiff is None or (max(0, abs(diff)-slack), sniperdiff) < (max(0, abs(bestdiff)-slack), bestsniperdiff):
-        bestdiff, bestsniperdiff, bestblue, bestred = diff, sniperdiff, blue, red
+    self._balancing = True
+    olddiff, bestdiff, blue, red = self._randTeams(100, 0.1)
+    if client:
+      if (client.team == b3.TEAM_BLUE and \
+          client.cid not in [ c.cid for c in blue ]) or \
+         (client.team == b3.TEAM_RED and \
+          client.cid not in [ c.cid for c in red ]):
+         # don't move player who initiated skuffle
+         blue, red = red, blue
     moves = 0
     if bestdiff is not None:
         self.console.write('bigtext "Skill Shuffle in Progress!"')
-        moves = self._move(bestblue, bestred)
+        moves = self._move(blue, red)
     if moves:
         self.console.write('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (
           olddiff, bestdiff))
     else:
         self.console.write('^1Cannot improve team balance!')
+    self._forgetTeamContrib()
+    self._balancing = False
   
   def _countSnipers(self, team):
     n = 0
     for c in team:
-      # Count players with SR8
-      if 'Z' in getattr(c, 'gear', ''):
+      kills = max(0, c.var(self, 'kills', 0).value)
+      deaths = max(0, c.var(self, 'deaths', 0).value)
+      ratio = kills/(1.0+deaths)
+      if ratio < 1.2:
+        # Ignore sniper noobs
+        continue 
+      # Count players with SR8 and PSG1
+      gear = getattr(c, 'gear', '')
+      if 'Z' in gear or 'N' in gear:
         n += 1
     return n
 
   def _move(self, blue, red):
+    self.debug('move: final blue team: ' + ' '.join(c.name for c in blue))
+    self.debug('move: final red team: ' + ' '.join(c.name for c in red))
+
     # Filter out players already in correct team
     blue = [ c for c in blue if c.team != b3.TEAM_BLUE ]
     red = [ c for c in red if c.team != b3.TEAM_RED ]
@@ -912,7 +1066,8 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     clients = self.console.clients.getList()
     numblue = len([ c for c in clients if c.team == b3.TEAM_BLUE ])
     numred = len([ c for c in clients if c.team == b3.TEAM_RED ])
-    self.ignoreSet(60)
+    self.debug('move: num players: blue=%d red=%d' % (numblue, numred))
+    self.ignoreSet(30)
 
     # We have to make sure we don't get a "too many players" error from the
     # server when we move the players. Start moving from the team with most
@@ -920,63 +1075,122 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     # spec mode.
     moves = len(blue) + len(red)
     spec = None
+    self.debug('move: need to do %d moves' % moves)
+    self.debug('move: will go to blue team: ' + ' '.join(c.name for c in blue))
+    self.debug('move: will go to red team: ' + ' '.join(c.name for c in red))
 
     if blue and numblue == numred:
         random.shuffle(blue)
         spec = blue.pop()
         self.console.write('forceteam %s spectate' % spec.cid)
-        numblue -= 1
+        numred -= 1
+        moves -= 1
+        self.debug('move: moved %s from red to spec' % spec.name)
 
     for _ in xrange(moves):
-        if blue and (len(blue) > len(red) or numblue < numred):
+        if (blue and numblue < numred) or (blue and not red):
             c = blue.pop()
             self.console.write('forceteam %s blue' % c.cid)
             numblue += 1
             numred -= 1
+            self.debug('move: moved %s to blue' % c.name)
         elif red:
             c = red.pop()
             self.console.write('forceteam %s red' % c.cid)
             numblue -= 1
             numred += 1
+            self.debug('move: moved %s to red' % c.name)
 
     if spec:
         self.console.write('forceteam %s blue' % spec.cid)
+        self.debug('move: moved %s from spec to blue' % spec.name)
 
     return moves
 
-  def cmd_paminmoves(self, data, client, cmd=None):
+  def cmd_pabalance(self, data=None, client=None, cmd=None):
     """\
     Move as few players as needed to create teams balanced by numbers AND skill.
     Locked players are not moved.
     """
-    clients = self.console.clients.getList()
-    scores = self._getScores(clients)
-    oldblue = [ c for c in clients if c.team == b3.TEAM_BLUE ]
-    oldred = [ c for c in clients if c.team == b3.TEAM_RED ]
-    n = len(oldblue) + len(oldred)
-    olddiff = self._getTeamScoreDiff(oldblue, oldred, scores)
-    bestdiff = bestsniperdiff = bestblue = bestred = None
-    slack = 0.4
-    # randomize teams a few times and pick the most balanced
-    for _ in xrange(100):
-      blue, red = self._getRandomTeams(clients, checkforced=True)
-      m = self._countMoves(oldblue, blue) + self._countMoves(oldred, red)
-      # always allow at least 2 moves, but don't move more than a third
-      # of the players
-      if m > max(2, n/3):
-        continue
-      diff = self._getTeamScoreDiff(blue, red, scores)
-      sniperdiff = abs(self._countSnipers(blue) - self._countSnipers(red))
-      if bestdiff is None or (max(0, abs(diff)-slack), sniperdiff) < (max(0, abs(bestdiff)-slack), bestsniperdiff):
-        bestdiff, bestsniperdiff, bestblue, bestred = diff, sniperdiff, blue, red
+    if client.maxLevel < 20 and self.ignoreCheck():
+      client.message('Teams changed recently, please wait a while')
+      return None
+    self._balancing = True
+    # always allow at least 2 moves, but don't move more than 30% of the
+    # players
+    olddiff, bestdiff, bestblue, bestred = \
+      self._randTeams(100, 0.1, 0.3)
     if bestdiff is not None:
-      self.console.write('bigtext Minmoving!')
+      self.console.write('bigtext "Balancing teams!"')
       self._move(bestblue, bestred)
       self.console.write('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (
         olddiff, bestdiff))
     else:
       # we couldn't beat the previous diff by moving only a few players, do a full skuffle
       self.cmd_paskuffle(data, client, cmd)
+    self._forgetTeamContrib()
+    self._balancing = False
+
+  def _randTeams(self, times, slack, maxmovesperc=None):
+    # randomize teams a few times and pick the most balanced
+    clients = self.console.clients.getList()
+    scores = self._getScores(clients)
+    oldblue = [ c for c in clients if c.team == b3.TEAM_BLUE ]
+    oldred = [ c for c in clients if c.team == b3.TEAM_RED ]
+    n = len(oldblue) + len(oldred)
+    olddiff = self._getTeamScoreDiff(oldblue, oldred, scores)
+    self.debug('rand: n=%s' % n)
+    self.debug('rand: olddiff=%.2f' % olddiff)
+    bestdiff = None # best balance diff so far when diff > slack
+    sbestdiff = None # best balance diff so far when diff < slack
+    bestnumdiff = None # best difference in number of snipers so far
+    bestblue = bestred = None # best teams so far when diff > slack
+    sbestblue = sbestred = None # new teams so far when diff < slack
+    epsilon = 0.0001
+    if not maxmovesperc and abs(len(oldblue)-len(oldred)) > 1:
+      # Teams are unbalanced by count, force both teams two have equal number
+      # of players
+      self.debug('rand: force new teams')
+      bestblue, bestred = self._getRandomTeams(clients, checkforced=True)
+      bestdiff = self._getTeamScoreDiff(bestblue, bestred, scores)
+    for _ in xrange(times):
+      blue, red = self._getRandomTeams(clients, checkforced=True)
+      m = self._countMoves(oldblue, blue) + self._countMoves(oldred, red)
+      if maxmovesperc and m > max(2, int(round(maxmovesperc*n))):
+        continue
+      diff = self._getTeamScoreDiff(blue, red, scores)
+      if abs(diff) <= slack:
+        # balance below slack threshold, try to distribute the snipers instead
+        numdiff = abs(self._countSnipers(blue) - self._countSnipers(red))
+        if bestnumdiff is None or numdiff < bestnumdiff:
+          # got better sniper num diff
+          if bestnumdiff is None:
+            self.debug('rand: first numdiff %d (sdiff=%.2f)' % (numdiff, diff))
+          else:
+            self.debug('rand: found better numdiff %d < %d (sdiff=%.2f)' % (numdiff, bestnumdiff, diff))
+          sbestblue, sbestred = blue, red
+          sbestdiff, bestnumdiff = diff, numdiff
+        elif numdiff == bestnumdiff and abs(diff) < abs(sbestdiff)-epsilon:
+          # same number of snipers but better balance diff
+          self.debug('rand: found better sdiff %.2f < %.2f (numdiff=%d bestnumdiff=%d)' % (abs(diff), abs(sbestdiff), numdiff, bestnumdiff))
+          sbestblue, sbestred = blue, red
+          sbestdiff = diff
+      elif bestdiff is None or abs(diff) < abs(bestdiff)-epsilon:
+        # balance above slack threshold
+        if bestdiff is None:
+          self.debug('rand: first diff %.2f' % abs(diff))
+        else:
+          self.debug('rand: found better diff %.2f < %.2f' % (abs(diff), abs(bestdiff)))
+        bestblue, bestred = blue, red
+        bestdiff = diff
+    if bestdiff is not None:
+      self.debug('rand: bestdiff=%.2f' % bestdiff)
+    if sbestdiff is not None:
+      self.debug('rand: sbestdiff=%.2f bestnumdiff=%d' % (sbestdiff, bestnumdiff))
+      self.debug('rand: snipers: blue=%d red=%d' % \
+        (self._countSnipers(sbestblue), self._countSnipers(sbestred)))
+      return olddiff, sbestdiff, sbestblue, sbestred
+    return olddiff, bestdiff, bestblue, bestred
 
   def _countMoves(self, old, new):
     i = 0
@@ -986,7 +1200,115 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
         i += 1
     return i
 
-  def cmd_bbswap(self, data, client, cmd=None):
+  def skillcheck(self):
+    if self._balancing or self.ignoreCheck():
+      return
+
+    gametype = self._getGameType()
+
+    # run skillbalancer only if current gametype is in autobalance_gametypes list
+    try:
+      self._autobalance_gametypes_array.index(gametype)
+    except:
+      self.debug('Current gametype (%s) is not specified in autobalance_gametypes - skillbalancer disabled', self.console.game.gameType)
+      return None 
+
+    if self._skill_balance_mode == 0:
+      # disabled
+      return
+    
+    clients = self.console.clients.getList()
+    blue = [ c for c in clients if c.team == b3.TEAM_BLUE ]
+    red = [ c for c in clients if c.team == b3.TEAM_RED ]
+    self.debug("skillcheck: numblue=%d numred=%d" % (len(blue), len(red)))
+
+    if len(blue) + len(red) <= 2:
+      self.debug('skillcheck: too few players')
+      return
+
+    bs, rs = self._getRecentTeamContrib(blue, red)
+    tcdiff = bs-rs
+    absdiff = abs(tcdiff)
+    unbalanced = False
+    self.debug('skillcheck: blue=%.2f red=%.2f tcdiff=%.2f' % (bs, rs, tcdiff))
+
+    if absdiff >= self._skilldiff:
+      unbalanced = True
+
+    if unbalanced or self._skill_balance_mode == 1:
+        if absdiff > 1:
+          # Difference in Average Team Contribution Per Minute
+          self.console.write('DATCPM is %.2f' % tcdiff)
+          if self._skill_balance_mode == 1:
+            # Give advice if teams are unfair
+            self._advise(tcdiff, 2, 1, 1)
+          else:
+            # Only report stronger team, we will balance/skuffle below
+            self._advise(tcdiff, 0, 1, 1)
+
+    if unbalanced:
+      if self._skill_balance_mode == 2:
+        self.cmd_pabalance()
+      if self._skill_balance_mode == 3:
+        self.cmd_paskuffle()
+
+    return None
+  
+  def _advise(self, tcdiff, mode, console, bigtext):
+    # mode 0: no advice
+    # mode 1: give advice
+    # mode 2: give advice if teams are unfair
+    absdiff = abs(tcdiff)
+    unfair = absdiff > 2.31 # constant carefully reviewed by an eminent team of trained Swedish scientistians :)
+    word = None
+    if 1 <= absdiff < 2:
+      word = 'stronger'
+    if 2 <= absdiff < 3:
+      word = 'dominating'
+    if 3 <= absdiff < 4:
+      word = 'overpowering'
+    if 4 <= absdiff < 5:
+      word = 'supreme'
+    if 5 <= absdiff < 6:
+      word = 'Godlike!'
+    if 6 <= absdiff:
+      word = 'probably cheating :P'
+    if word:
+      team = tcdiff < 0 and 'Red' or 'Blue'
+      msg = '%s team is %s' % (team, word)
+      if unfair and (mode == 1 or mode == 2):
+          msg = '%s team is %s, consider to use !bal' % (team, word)
+      if not unfair and mode == 1:
+          msg = '%s team is %s, but no action necessary yet' % (team, word)
+    else:
+       msg = 'Teams seem fair'
+    if console:
+      self.console.write(msg)
+    if bigtext:
+      self.console.write('bigtext "%s"' % msg)
+
+  def cmd_paautoskuffle(self, data, client, cmd=None):
+    modes = ["0-none", "1-advise", "2-autobalance", "3-autoskuffle"]
+    if not data:
+      mode = modes[self._skill_balance_mode]
+      self.console.write("Skill balancer mode is '%s'" % mode)
+      self.console.write("Options are %s" % ', '.join(modes))
+      return
+    mode = None
+    try:
+      mode = int(data)
+    except ValueError:
+      for i, m in enumerate(modes):
+        if data in m:
+          mode = i
+    if mode is not None and 0 <= mode <= 3:
+      self._skill_balance_mode = mode
+      self.console.write("Skill balancer mode is now '%s'" % modes[mode])
+      self.skillcheck()
+    else:
+      self.console.write("Valid options are %s" % ', '.join(modes))
+
+  def cmd_paswap(self, data, client, cmd=None):
     """\
     <player1> [player2] - Swap two teams for 2 clients. If player2 is not specified, the admin
     using the command is swapped with player1. Doesn't work with spectators (exception for calling admin).
@@ -1011,24 +1333,18 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     else:
       client2 = client
     if client1.team == b3.TEAM_SPEC:
-      client.message("%s is a spectator! - Can't be Swaped" % (client1.name))
+      client.message("%s is a spectator! - Can't be swapped" % (client1.name))
       return False
     if client2.team == b3.TEAM_SPEC:
-      client.message("%s is a spectator! - Can't be Swaped" % (client2.name))
+      client.message("%s is a spectator! - Can't be swapped" % (client2.name))
       return False
     if client1.team == client2.team:
-      client.message("%s and %s are on the same team! - Nice Try :p" % ((client1.name), client2.name))
+      client.message("%s and %s are on the same team! - Swapped them anyway :p" % ((client1.name), client2.name))
       return False
     if client1.team == b3.TEAM_RED:
-      team1 = "blue"
-      team2 = "red"
+      self._move([client1], [client2])  
     else:
-      team1 = "red"
-      team2 = "blue"
-    self.console.write("forceteam %s spectator" % (client1.name))
-    self.console.write("forceteam %s spectator" % (client2.name)) 
-    self.console.write("forceteam %s %s" % ((client1.name), team1))
-    self.console.write("forceteam %s %s" % ((client2.name), team2)) 
+      self._move([client2], [client1])  
     # No need to send the message twice to the switching admin :-)
     if (client1 != client):
       client1.message("^4You were swapped with %s by the admin." % (client2.name))
@@ -1689,6 +2005,12 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
   def onTeamChange(self, team, client):
     #store the time of teamjoin for autobalancing purposes 
     client.setvar(self, 'teamtime', self.console.time())
+    # remember current stats so we can tell how the player
+    # is performing on the new team
+    for var in ('kills', 'deaths', 'teamkills', 'headhits', 'helmethits',
+        'flag_captured', 'flag_returned', 'bomb_planted', 'bomb_defused'):
+      old = client.var(self, var, 0).value
+      client.setvar(self, "prev_" + var, old)
     self.verbose('Client variable teamtime set to: %s' % client.var(self, 'teamtime').value)
 
     if not self._matchmode and client.isvar(self, 'paforced'):
@@ -1781,9 +2103,9 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
     except:
       return False
 
-  def teamcheck(self):
+  def _getGameType(self):
     # g_gametype //0=FreeForAll=dm, 3=TeamDeathMatch=tdm, 4=Team Survivor=ts, 
-  # 5=Follow the Leader=ftl, 6=Capture and Hold=cah, 7=Capture The Flag=ctf, 8=Bombmode=bm
+    # 5=Follow the Leader=ftl, 6=Capture and Hold=cah, 7=Capture The Flag=ctf, 8=Bombmode=bm
 
     # 10/22/2008 - 1.4.0b10 - mindriot
     # if gametype is unknown when B3 is started in the middle of a game
@@ -1795,13 +2117,21 @@ class PoweradminurtPlugin(b3.plugin.Plugin):
       except:
         self.debug('Unable to determine current gametype - remains at (%s)', self.console.game.gameType)
 
+    return self.console.game.gameType
+
+  def teamcheck(self):
+    gametype = self._getGameType()
+
     # run teambalance only if current gametype is in autobalance_gametypes list
     try:
-      self._autobalance_gametypes_array.index(self.console.game.gameType)
+      self._autobalance_gametypes_array.index(gametype)
     except:
       self.debug('Current gametype (%s) is not specified in autobalance_gametypes - teambalancer disabled', self.console.game.gameType)
       return None 
 
+    if self._skill_balance_mode != 0:
+      self.debug('Skill balancer is active, not performing classic teamcheck');
+        
     if self.console.time() > self._ignoreTill:
       self.teambalance()
 
@@ -2493,7 +2823,7 @@ if __name__ == '__main__':
                     return None
         def writercon(self, msg, maxRetries=None):
             """Write a message to Rcon/Console"""
-            outputrcon = b3.parsers.q3a_rcon.Rcon(self, (\
+            outputrcon = b3.parsers.q3a.rcon.Rcon(self, (\
                                  self.config.get('server', 'rcon_ip'), \
                                  self.config.getint('server', 'port')), \
                                  self.config.get('server', 'rcon_password'))
@@ -2506,7 +2836,7 @@ if __name__ == '__main__':
     fakeConsole = FakeUrtConsole(b3xml)
     fakeConsole.startup()
     
-    p = PoweradminurtPlugin(fakeConsole, config=os.path.dirname(__file__)+'/conf/poweradminurt.xml')
+    p = PoweradminurtPlugin(fakeConsole, config=os.path.dirname(os.path.abspath(__file__))+'/conf/poweradminurt.xml')
     p.onStartup()
     
     ########################## ok lets test ###########################
@@ -2516,6 +2846,6 @@ if __name__ == '__main__':
     
     superadmin.says('!slap joe')
     superadmin.says('!slap joe 5')
-    
+
     time.sleep(30)
 
