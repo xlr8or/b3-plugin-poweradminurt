@@ -175,6 +175,17 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('lms')
 
 
+    def cmd_pajump(self, data, client, cmd=None):
+        """\
+        Change game type to Jump
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        self.console.write('g_gametype 9')
+        if client:
+            client.message('^7game type changed to ^4Jump')
+        self.set_configmode('jump')
+
+
 
     ###############################################################################################
     #

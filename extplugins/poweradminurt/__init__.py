@@ -127,8 +127,10 @@
 # * change: command !setnextmap now gets map suggestions from the B3 parser
 # 28/10/2012 - 1.10 - Courgette
 # * merge from xlr8or/master
+# 09/11/2012 - 1.11 - Courgette
+# * new: add command !jump to change the server to the jump gametype
 #
-__version__ = '1.10'
+__version__ = '1.11'
 __author__  = 'xlr8or, courgette'
 
 
