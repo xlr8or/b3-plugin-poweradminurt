@@ -296,9 +296,9 @@ Controls how long a player may stay in spec before being warned. All parameters 
 In order to make Spec checker work it is crucial you edit *b3/conf/plugin_admin.xml*
 
 Open the file with your favorite text editor and look for the next line:
-`<set name="spectator">5m, ^7spectator too long on full server</set>`
+  `<set name="spectator">5m, ^7spectator too long on full server</set>`
 Change it to:
-`<set name="spectator">1h, ^7spectator too long on full server</set>`
+  `<set name="spectator">1h, ^7spectator too long on full server</set>`
 
 
 Bot Support
@@ -458,6 +458,6 @@ Contrib
 - *patches* are welcome. Send me a `pull request <http://help.github.com/send-pull-requests/>`_. It is best if your patch provides tests.
 
 .. image:: https://travis-ci.org/thomasleveil/b3-plugin-poweradminurt.png?branch=master
-:alt: Build Status
+   :alt: Build Status
    :target: http://travis-ci.org/thomasleveil/b3-plugin-poweradminurt
 
