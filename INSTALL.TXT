@@ -1,16 +1,14 @@
 --------------------------------------------------------------------------------
-Installation of PowerAdminUrt for B3 v1.1.3+
+Installation of PowerAdminUrt
 --------------------------------------------------------------------------------
 *  Read all in this zip file included readme's prior to installation. 
-*  This version of PowerAdminUrt is in development for use with the latest
-   version of B3: v1.1.3.
-   How to get this version see here: 
-   http://www.bigbrotherbot.com/forums/index.php?topic=353.0
-   You can also grab a B3 package from my development branch, this version
-   might be unstable though:
-   http://xlr8or.snt.utwente.nl/hg/b3?ca=9f36620020ea;type=gz
-*  Then Copy the content of this zip file into the corresponding b3 
-   (sub)directories.
+
+*  From the zip file :
+     - copy the directory extplugins/poweradminurt/ into your b3/extplugins/ directory
+     - copy the file extplugins/conf/plugin_poweradminurt.ini into the folder that contains your main b3.xml config file
+     - add to the plugins section of your main b3 config file:
+
+     <plugin name="poweradminurt" config="@conf/plugin_poweradminurt.ini" />
 
 --------------------------------------------------------------------------------
 Support for the basic Bot:
