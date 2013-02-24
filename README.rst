@@ -131,8 +131,8 @@ Commands
   **Usage examples**
 
   Moving Bill to the red team :
-    `!force bill red`
-    `!force bill r`
+    - `!force bill red`
+    - `!force bill r`
 
   Forcing Bill to stay in the red team :
     `!force bill r lock`
