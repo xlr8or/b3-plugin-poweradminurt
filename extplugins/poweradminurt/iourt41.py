@@ -2405,9 +2405,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
 #---Spectator Checking-----------------------------------------------------------------------------
     def speccheck(self):
-        self.debug('Checking for idle Spectators')
-        if self.isEnabled() and (
-            self.console.time() > self._ignoreTill) and self._g_maxGameClients == 0 and not self._matchmode:
+        if self.isEnabled() and self._g_maxGameClients == 0 and not self._matchmode:
+            self.debug('Checking for idle Spectators')
             clients = self.console.clients.getList()
             if len(clients) < self._smaxplayers:
                 self.verbose('Clients online (%s) < maxplayers (%s), ignoring' % (len(clients), self._smaxplayers))
@@ -2415,7 +2414,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
             for c in clients:
                 if not c.isvar(self, 'teamtime'):
-                    self.debug('client has no variable teamtime')
+                    self.debug('client %s has no variable teamtime' % c)
                     # 10/22/2008 - 1.4.0b11 - mindriot
                     # store the time of teamjoin for autobalancing purposes
                     c.setvar(self, 'teamtime', self.console.time())
@@ -2427,8 +2426,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 elif c.isvar(self, 'paforced'):
                     self.debug('%s is forced by an admin.' % c.name)
                     continue
-                elif c.team == b3.TEAM_SPEC and ( self.console.time() - c.var(self, 'teamtime').value ) > (
-                    self._smaxspectime * 60 ):
+                elif c.team == b3.TEAM_SPEC and (self.console.time() - c.var(self, 'teamtime').value) > \
+                        (self._smaxspectime * 60):
                     self.debug('Warning %s for speccing on full server.' % c.name)
                     self._adminPlugin.warnClient(c, 'spec')
 

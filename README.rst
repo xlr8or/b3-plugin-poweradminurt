@@ -439,6 +439,8 @@ Changelog
   - merge from xlr8or/master
 1.11 -  09/11/2012 - Courgette
   - new: add command !jump to change the server to the jump gametype
+1.12 -  07/04/2013 - Courgette
+  - the spec check won't be ignored at game/round start for 30s anymore
 
 
 
