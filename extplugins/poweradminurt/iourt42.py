@@ -185,6 +185,23 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('jump')
 
     
+    def cmd_paskins(self, data, client, cmd=None):
+        """\
+        Set the use of client skins <on/off>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('on', 'off'):
+            client.message('^7Invalid or missing data, try !help paskins')
+            return
+        else:
+            if data == 'on':
+                self.console.setCvar('g_skins', 1)
+                self.console.say('^7Client skins: ^2ON')
+            elif data == 'off':
+                self.console.setCvar('g_skins', 0)
+                self.console.say('^7Client skins: ^9OFF')
+                
+    
     def cmd_pagoto(self, data, client, cmd=None):
         """\
         Set the goto <on/off>
