@@ -163,7 +163,6 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.write('smite %s' % sclient.cid)
 
 
-
     def cmd_palms(self, data, client, cmd=None):
         """\
         Change game type to Last Man Standing
@@ -185,6 +184,22 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             client.message('^7game type changed to ^4Jump')
         self.set_configmode('jump')
 
+    
+    def cmd_pagoto(self, data, client, cmd=None):
+        """\
+        Set the goto <on/off>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('on', 'off'):
+            client.message('^7Invalid or missing data, try !help pagoto')
+            return
+        else:
+            if data == 'on':
+                self.console.setCvar('g_allowgoto', 1)
+                self.console.say('^7Goto: ^2ON')
+            elif data == 'off':
+                self.console.setCvar('g_allowgoto', 0)
+                self.console.say('^7Goto: ^9OFF')
 
 
     ###############################################################################################
