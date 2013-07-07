@@ -234,6 +234,26 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             elif data == 'off':
                 self.console.setCvar('g_allowgoto', 0)
                 self.console.say('^7Goto: ^9OFF')
+                
+                
+    def cmd_pastamina(self, data, client, cmd=None):
+        """\
+        Set the stamina behavior <default/regain/infinite>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('default', 'regain', 'infinite'):
+            client.message('^7Invalid or missing data, try !help pastamina')
+            return
+        else:
+            if data == 'default':
+                self.console.setCvar('g_stamina', 0)
+                self.console.say('^7Stamina mode: ^3DEFAULT')
+            elif data == 'regain':
+                self.console.setCvar('g_stamina', 1)
+                self.console.say('^7Stamina mode: ^3REGAIN')
+            elif data == 'infinite':
+                self.console.setCvar('g_stamina', 2)
+                self.console.say('^7Stamina mode: ^3INFINITE')
 
 
     ###############################################################################################
