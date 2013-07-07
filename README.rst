@@ -257,7 +257,19 @@ Commands specific to Urban Terror 4.2
 
 !pajump (!jump)
   change game type to *Jump Mode*
+  
+!pagoto (!goto) <on/off>
+  activate/deactivate the *goto* (Jump mode feature)
+  
+!paskins (!skins) <on/off>
+  activate/deactivate the use of client skins
+  
+!pafunstuff (!funstuff) <on/off>
+  activate/deactivate the use of funstuff
 
+!pastamina (!stamina) <default/regain/infinite>
+  set the stamina behavior (Jump mode feature)
+  
 
 Other features
 --------------
@@ -441,7 +453,12 @@ Changelog
   - new: add command !jump to change the server to the jump gametype
 1.12 -  07/04/2013 - Courgette
   - the spec check won't be ignored at game/round start for 30s anymore
-
+1.13 -  07/07/2013 - Fenix
+  - added command !pagoto
+  - added command !paskins
+  - added command !pafunstuff
+  - added command !pastamina
+  - updated hitlocation codes to match the last UrT release (4.2.013)
 
 
 Credit
