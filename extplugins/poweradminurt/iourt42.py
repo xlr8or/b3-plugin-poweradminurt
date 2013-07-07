@@ -24,8 +24,8 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     # hit locations
     _hitloc_head = 1
-    _hitloc_helmet = 4
-    _hitloc_torso = 5
+    _hitloc_helmet = 2
+    _hitloc_torso = 3
 
     # radio spam protection
     _rsp_enable = False
@@ -163,7 +163,6 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.write('smite %s' % sclient.cid)
 
 
-
     def cmd_palms(self, data, client, cmd=None):
         """\
         Change game type to Last Man Standing
@@ -185,6 +184,76 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             client.message('^7game type changed to ^4Jump')
         self.set_configmode('jump')
 
+    
+    def cmd_paskins(self, data, client, cmd=None):
+        """\
+        Set the use of client skins <on/off>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('on', 'off'):
+            client.message('^7Invalid or missing data, try !help paskins')
+            return
+        else:
+            if data == 'on':
+                self.console.setCvar('g_skins', 1)
+                self.console.say('^7Client skins: ^2ON')
+            elif data == 'off':
+                self.console.setCvar('g_skins', 0)
+                self.console.say('^7Client skins: ^9OFF')
+    
+    
+    def cmd_pafunstuff(self, data, client, cmd=None):
+        """\
+        Set the use of funstuff <on/off>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('on', 'off'):
+            client.message('^7Invalid or missing data, try !help pafunstuff')
+            return
+        else:
+            if data == 'on':
+                self.console.setCvar('g_funstuff', 1)
+                self.console.say('^7Funstuff: ^2ON')
+            elif data == 'off':
+                self.console.setCvar('g_funstuff', 0)
+                self.console.say('^7Funstuff: ^9OFF')
+                            
+    
+    def cmd_pagoto(self, data, client, cmd=None):
+        """\
+        Set the goto <on/off>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('on', 'off'):
+            client.message('^7Invalid or missing data, try !help pagoto')
+            return
+        else:
+            if data == 'on':
+                self.console.setCvar('g_allowgoto', 1)
+                self.console.say('^7Goto: ^2ON')
+            elif data == 'off':
+                self.console.setCvar('g_allowgoto', 0)
+                self.console.say('^7Goto: ^9OFF')
+                
+                
+    def cmd_pastamina(self, data, client, cmd=None):
+        """\
+        Set the stamina behavior <default/regain/infinite>
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not data or data not in ('default', 'regain', 'infinite'):
+            client.message('^7Invalid or missing data, try !help pastamina')
+            return
+        else:
+            if data == 'default':
+                self.console.setCvar('g_stamina', 0)
+                self.console.say('^7Stamina mode: ^3DEFAULT')
+            elif data == 'regain':
+                self.console.setCvar('g_stamina', 1)
+                self.console.say('^7Stamina mode: ^3REGAIN')
+            elif data == 'infinite':
+                self.console.setCvar('g_stamina', 2)
+                self.console.say('^7Stamina mode: ^3INFINITE')
 
 
     ###############################################################################################
