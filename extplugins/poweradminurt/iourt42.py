@@ -24,8 +24,8 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     # hit locations
     _hitloc_head = 1
-    _hitloc_helmet = 4
-    _hitloc_torso = 5
+    _hitloc_helmet = 2
+    _hitloc_torso = 3
 
     # radio spam protection
     _rsp_enable = False
