@@ -459,6 +459,8 @@ Changelog
   - added command !pafunstuff
   - added command !pastamina
   - updated hitlocation codes to match the last UrT release (4.2.013)
+1.14 -  14/07/2013 - Courgette
+  - hitlocation codes are provided by the B3 parser if available
 
 
 Credit

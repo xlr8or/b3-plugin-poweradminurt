@@ -104,10 +104,33 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
     _ignorePlus = 30
     _full_ident_level = 20
 
-    # hit locations
-    _hitloc_head = 0
-    _hitloc_helmet = 1
-    _hitloc_torso = 2
+    def __init__(self, console, config=None):
+        b3.plugin.Plugin.__init__(self, console, config)
+        if self.console.gameName != 'iourt41':
+            self.critical("unsupported game : %s" % self.console.gameName)
+            raise SystemExit(220)
+
+        ### hit location constants ###
+        try:
+            self.HL_HEAD = self.console.HL_HEAD
+        except AttributeError, err:
+            self.warning("could not get HL_HEAD value from B3 parser. %s" % err)
+            self.HL_HEAD = '0'
+        self.debug("HL_HEAD is %s" % self.HL_HEAD)
+
+        try:
+            self.HL_HELMET = self.console.HL_HELMET
+        except AttributeError, err:
+            self.warning("could not get HL_HELMET value from B3 parser. %s" % err)
+            self.HL_HELMET = '1'
+        self.debug("HL_HELMET is %s" % self.HL_HELMET)
+
+        try:
+            self.HL_TORSO = self.console.HL_TORSO
+        except AttributeError, err:
+            self.warning("could not get HL_TORSO value from B3 parser. %s" % err)
+            self.HL_TORSO = '2'
+        self.debug("HL_TORSO is %s" % self.HL_TORSO)
 
     def startup(self):
         """\
@@ -2501,8 +2524,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             'hitvars') and not self._matchmode:
             headshots = 0
             #damage = int(data[0])
-            weapon = int(data[1])
-            hitloc = int(data[2])
+            weapon = data[1]
+            hitloc = data[2]
 
             # set totals
             t = attacker.var(self, 'totalhits').value + 1
@@ -2511,24 +2534,24 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             victim.setvar(self, 'totalhitted', t)
 
             # headshots... no helmet!
-            if hitloc == self._hitloc_head:
+            if hitloc == self.HL_HEAD:
                 t = attacker.var(self, 'headhits').value + 1
                 attacker.setvar(self, 'headhits', t)
                 t = victim.var(self, 'headhitted').value + 1
                 victim.setvar(self, 'headhitted', t)
 
             # helmethits
-            elif hitloc == self._hitloc_helmet:
+            elif hitloc == self.HL_HELMET:
                 t = attacker.var(self, 'helmethits').value + 1
                 attacker.setvar(self, 'helmethits', t)
 
             # torso... no kevlar!
-            elif hitloc == self._hitloc_torso:
+            elif hitloc == self.HL_TORSO:
                 t = victim.var(self, 'torsohitted').value + 1
                 victim.setvar(self, 'torsohitted', t)
 
             # announce headshots
-            if self._hsall == True and hitloc in (self._hitloc_head, self._hitloc_helmet):
+            if self._hsall == True and hitloc in (self.HL_HEAD, self.HL_HELMET):
                 headshots = attacker.var(self, 'headhits').value + attacker.var(self, 'helmethits').value
                 hstext = 'headshots'
                 if headshots == 1:

@@ -17,15 +17,39 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 from poweradminurt.iourt41 import Poweradminurt41Plugin
+import b3.plugin
 from poweradminurt import __version__, __author__
 
 
 class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
-    # hit locations
-    _hitloc_head = 1
-    _hitloc_helmet = 2
-    _hitloc_torso = 3
+    def __init__(self, console, config=None):
+        b3.plugin.Plugin.__init__(self, console, config)
+        if self.console.gameName != 'iourt42':
+            self.critical("unsupported game : %s" % self.console.gameName)
+            raise SystemExit(220)
+
+        ### hit location constants ###
+        try:
+            self.HL_HEAD = self.console.HL_HEAD
+        except AttributeError, err:
+            self.warning("could not get HL_HEAD value from B3 parser. %s" % err)
+            self.HL_HEAD = '1'
+        self.debug("HL_HEAD is %s" % self.HL_HEAD)
+
+        try:
+            self.HL_HELMET = self.console.HL_HELMET
+        except AttributeError, err:
+            self.warning("could not get HL_HELMET value from B3 parser. %s" % err)
+            self.HL_HELMET = '2'
+        self.debug("HL_HELMET is %s" % self.HL_HELMET)
+
+        try:
+            self.HL_TORSO = self.console.HL_TORSO
+        except AttributeError, err:
+            self.warning("could not get HL_TORSO value from B3 parser. %s" % err)
+            self.HL_TORSO = '3'
+        self.debug("HL_TORSO is %s" % self.HL_TORSO)
 
     # radio spam protection
     _rsp_enable = False
