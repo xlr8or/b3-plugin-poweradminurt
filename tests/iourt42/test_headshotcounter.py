@@ -46,7 +46,6 @@ warn_kevlar_nr: 50
         self.console.say = Mock()
         self.console.write = Mock()
 
-
     def test_hitlocation(self):
 
         def joe_hits_simon(hitloc):
@@ -59,28 +58,27 @@ warn_kevlar_nr: 50
             self.assertEqual(helmet, self.joe.var(self.p, 'helmethits', default=0.0).value)
             self.assertEqual(torso, self.simon.var(self.p, 'torsohitted', default=0.0).value)
 
-
         # GIVEN
         self.joe.connects("6")
         self.simon.connects("7")
 
         # WHEN
-        joe_hits_simon(0)
+        joe_hits_simon('0')
         # THEN
         assertCounts(head=0.0, helmet=0.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(1) # 1 is head on 4.2
+        joe_hits_simon('1')
         # THEN
         assertCounts(head=1.0, helmet=0.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(4) # 4 is helmet on 4.2
+        joe_hits_simon('2')
         # THEN
         assertCounts(head=1.0, helmet=1.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(5) # 5 is torso on 4.2
+        joe_hits_simon('3')
         # THEN
         assertCounts(head=1.0, helmet=1.0, torso=1.0)
 

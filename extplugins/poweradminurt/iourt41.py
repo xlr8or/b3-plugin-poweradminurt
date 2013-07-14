@@ -104,10 +104,33 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
     _ignorePlus = 30
     _full_ident_level = 20
 
-    # hit locations
-    _hitloc_head = 0
-    _hitloc_helmet = 1
-    _hitloc_torso = 2
+    def __init__(self, console, config=None):
+        b3.plugin.Plugin.__init__(self, console, config)
+        if self.console.gameName != 'iourt41':
+            self.critical("unsupported game : %s" % self.console.gameName)
+            raise SystemExit(220)
+
+        ### hit location constants ###
+        try:
+            self.HL_HEAD = self.console.HL_HEAD
+        except AttributeError, err:
+            self.warning("could not get HL_HEAD value from B3 parser. %s" % err)
+            self.HL_HEAD = '0'
+        self.debug("HL_HEAD is %s" % self.HL_HEAD)
+
+        try:
+            self.HL_HELMET = self.console.HL_HELMET
+        except AttributeError, err:
+            self.warning("could not get HL_HELMET value from B3 parser. %s" % err)
+            self.HL_HELMET = '1'
+        self.debug("HL_HELMET is %s" % self.HL_HELMET)
+
+        try:
+            self.HL_TORSO = self.console.HL_TORSO
+        except AttributeError, err:
+            self.warning("could not get HL_TORSO value from B3 parser. %s" % err)
+            self.HL_TORSO = '2'
+        self.debug("HL_TORSO is %s" % self.HL_TORSO)
 
     def startup(self):
         """\
@@ -2405,9 +2428,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
 #---Spectator Checking-----------------------------------------------------------------------------
     def speccheck(self):
-        self.debug('Checking for idle Spectators')
-        if self.isEnabled() and (
-            self.console.time() > self._ignoreTill) and self._g_maxGameClients == 0 and not self._matchmode:
+        if self.isEnabled() and self._g_maxGameClients == 0 and not self._matchmode:
+            self.debug('Checking for idle Spectators')
             clients = self.console.clients.getList()
             if len(clients) < self._smaxplayers:
                 self.verbose('Clients online (%s) < maxplayers (%s), ignoring' % (len(clients), self._smaxplayers))
@@ -2415,7 +2437,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
             for c in clients:
                 if not c.isvar(self, 'teamtime'):
-                    self.debug('client has no variable teamtime')
+                    self.debug('client %s has no variable teamtime' % c)
                     # 10/22/2008 - 1.4.0b11 - mindriot
                     # store the time of teamjoin for autobalancing purposes
                     c.setvar(self, 'teamtime', self.console.time())
@@ -2427,8 +2449,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 elif c.isvar(self, 'paforced'):
                     self.debug('%s is forced by an admin.' % c.name)
                     continue
-                elif c.team == b3.TEAM_SPEC and ( self.console.time() - c.var(self, 'teamtime').value ) > (
-                    self._smaxspectime * 60 ):
+                elif c.team == b3.TEAM_SPEC and (self.console.time() - c.var(self, 'teamtime').value) > \
+                        (self._smaxspectime * 60):
                     self.debug('Warning %s for speccing on full server.' % c.name)
                     self._adminPlugin.warnClient(c, 'spec')
 
@@ -2502,8 +2524,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             'hitvars') and not self._matchmode:
             headshots = 0
             #damage = int(data[0])
-            weapon = int(data[1])
-            hitloc = int(data[2])
+            weapon = data[1]
+            hitloc = data[2]
 
             # set totals
             t = attacker.var(self, 'totalhits').value + 1
@@ -2512,24 +2534,24 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             victim.setvar(self, 'totalhitted', t)
 
             # headshots... no helmet!
-            if hitloc == self._hitloc_head:
+            if hitloc == self.HL_HEAD:
                 t = attacker.var(self, 'headhits').value + 1
                 attacker.setvar(self, 'headhits', t)
                 t = victim.var(self, 'headhitted').value + 1
                 victim.setvar(self, 'headhitted', t)
 
             # helmethits
-            elif hitloc == self._hitloc_helmet:
+            elif hitloc == self.HL_HELMET:
                 t = attacker.var(self, 'helmethits').value + 1
                 attacker.setvar(self, 'helmethits', t)
 
             # torso... no kevlar!
-            elif hitloc == self._hitloc_torso:
+            elif hitloc == self.HL_TORSO:
                 t = victim.var(self, 'torsohitted').value + 1
                 victim.setvar(self, 'torsohitted', t)
 
             # announce headshots
-            if self._hsall == True and hitloc in (self._hitloc_head, self._hitloc_helmet):
+            if self._hsall == True and hitloc in (self.HL_HEAD, self.HL_HELMET):
                 headshots = attacker.var(self, 'headhits').value + attacker.var(self, 'helmethits').value
                 hstext = 'headshots'
                 if headshots == 1:

@@ -65,22 +65,22 @@ warn_kevlar_nr: 50
         self.simon.connects("7")
 
         # WHEN
-        joe_hits_simon(4)
+        joe_hits_simon('4')
         # THEN
         assertCounts(head=0.0, helmet=0.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(0) # 1 is head on 4.1
+        joe_hits_simon('0')
         # THEN
         assertCounts(head=1.0, helmet=0.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(1) # 4 is helmet on 4.1
+        joe_hits_simon('1')
         # THEN
         assertCounts(head=1.0, helmet=1.0, torso=0.0)
 
         # WHEN
-        joe_hits_simon(2) # 5 is torso on 4.1
+        joe_hits_simon('2')
         # THEN
         assertCounts(head=1.0, helmet=1.0, torso=1.0)
 
