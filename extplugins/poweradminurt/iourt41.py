@@ -2721,7 +2721,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 if client:
                     client.message('^7nextmap set to %s' % mapname)
             elif isinstance(match, list):
-                client.message('do you mean : %s ?' % string.join(match,', '))
+                client.message('do you mean : %s ?' % string.join(match[:5],', '))
             else:
                 client.message('^7cannot find any map like [^4%s^7].' % data)
 
