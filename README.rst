@@ -461,7 +461,8 @@ Changelog
   - updated hitlocation codes to match the last UrT release (4.2.013)
 1.14 -  14/07/2013 - Courgette
   - hitlocation codes are provided by the B3 parser if available
-
+1.14.1 - 17/09/2013 - Fenix
+  - !pasetnextmap command displays at most 5 map suggestions
 
 Credit
 ------
