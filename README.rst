@@ -463,6 +463,9 @@ Changelog
   - hitlocation codes are provided by the B3 parser if available
 1.14.1 - 17/09/2013 - Fenix
   - !pasetnextmap command displays at most 5 map suggestions
+1.15 -  09/10/2013 - Courgette
+  - !paident command now shows the auth name from the Frozen Sand account (UrT 4.2 only)
+
 
 Credit
 ------

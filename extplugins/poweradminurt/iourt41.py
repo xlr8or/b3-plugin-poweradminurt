@@ -2092,7 +2092,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             # input[0] is the player id
             sclient = self._adminPlugin.findClientPrompt(input[0], client)
             if not sclient:
-                # a player matchin the name was not found, a list of closest matches will be displayed
+                # a player matching the name was not found, a list of closest matches will be displayed
                 # we can exit here and the user will retry with a more specific player
                 return False
 

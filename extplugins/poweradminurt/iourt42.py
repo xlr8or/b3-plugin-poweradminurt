@@ -279,6 +279,32 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
                 self.console.setCvar('g_stamina', 2)
                 self.console.say('^7Stamina mode: ^3INFINITE')
 
+    def cmd_paident(self, data, client=None, cmd=None):
+        """\
+        <name> - show the ip and guid and authname of a player
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        input = self._adminPlugin.parseUserCmd(data)
+        if not input:
+            cmd.sayLoudOrPM(client, 'Your id is ^2@%s' % (client.id))
+            return True
+        else:
+            # input[0] is the player id
+            sclient = self._adminPlugin.findClientPrompt(input[0], client)
+            if not sclient:
+                # a player matching the name was not found, a list of closest matches will be displayed
+                # we can exit here and the user will retry with a more specific player
+                return False
+
+        if client.maxLevel < self._full_ident_level:
+            cmd.sayLoudOrPM(client,
+                '%s ^4@%s ^2%s' % (self.console.formatTime(self.console.time()), sclient.id, sclient.exactName))
+        else:
+            cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s ^2%s ^7[^2%s^7] since ^2%s' % (
+                self.console.formatTime(self.console.time()), sclient.id, sclient.exactName, sclient.ip, sclient.pbid,
+                self.console.formatTime(sclient.timeAdd)))
+        return True
+
 
     ###############################################################################################
     #
