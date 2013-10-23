@@ -43,6 +43,7 @@ class Iourt41TestCase(unittest.TestCase):
                 admin_plugin_conf_file = '@b3/conf/plugin_admin.xml'
             with logging_disabled():
                 self.adminPlugin = AdminPlugin(self.console, admin_plugin_conf_file)
+                self.adminPlugin.onLoadConfig()
                 self.adminPlugin.onStartup()
 
             # make sure the admin plugin obtained by other plugins is our admin plugin
