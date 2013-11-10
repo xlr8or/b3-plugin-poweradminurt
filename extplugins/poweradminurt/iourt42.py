@@ -68,7 +68,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     def registerEvents(self):
         """\
-        Reegister events needed
+        Register events needed
         """
         Poweradminurt41Plugin.registerEvents(self)
         self.registerEvent(self.console.EVT_CLIENT_RADIO)
@@ -109,13 +109,21 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.debug('Using default value (%s) for radio_spam_protection/enable' % self._rsp_enable)
 
         try:
+
             self._rsp_mute_duration = self.config.getint('radio_spam_protection', 'mute_duration')
+            if self._rsp_mute_duration < 1:
+                raise ValueError('radio_spam_protection/mute_duration cannot be lower than 1')
+
         except ConfigParser.NoOptionError:
             self.warning('Could not find radio_spam_protection/mute_duration in config file, using default: %s' %
                          self._rsp_mute_duration)
         except ValueError, e:
+            self._rsp_mute_duration = 2  # set again because it might have been overwritten
             self.error('Could not load radio_spam_protection/mute_duration config value: %s' % e)
             self.debug('Using default value (%s) for radio_spam_protection/mute_duration' % self._rsp_mute_duration)
+
+        self.debug('Radio spam protection enable: %s' % self._rsp_enable)
+        self.debug('Radio spam protection mute duration: %s' % self._rsp_mute_duration)
 
     ###############################################################################################
     #
