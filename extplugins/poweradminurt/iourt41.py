@@ -648,7 +648,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             for key, value in self.config.items('matchmode_configs'):
                 self._gameconfig[key] = value
 
-        except KeyError, e:
+        except (ConfigParser.NoSectionError, ConfigParser.NoOptionError, KeyError), e:
             self.warning('could not read matchmode configs: %s' % e)
 
     def loadBotSupport(self):

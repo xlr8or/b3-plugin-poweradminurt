@@ -33,7 +33,7 @@ palms-lms: 20           ; change game type to Last Man Standing
     def test_nominal(self):
         self.moderator.message_history = []
         self.moderator.says("!lms")
-        self.console.write.assert_has_calls([call('g_gametype 1')])
+        self.console.write.assert_has_calls([call('set g_gametype "1"')])
         self.assertEqual(['game type changed to Last Man Standing'], self.moderator.message_history)
 
 
