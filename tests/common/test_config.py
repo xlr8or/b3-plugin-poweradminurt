@@ -44,24 +44,24 @@ class mixin_conf(object):
 [matchmode]
 plugins_disable:
         """)
-        self.p.LoadMatchMode()
-        self.assertEqual([], self.p.match_plugin_disable)
+        self.p.loadMatchMode()
+        self.assertEqual([], self.p._match_plugin_disable)
 
         # one element
         self.conf.loadFromString("""
 [matchmode]
 plugins_disable: foo
         """)
-        self.p.LoadMatchMode()
-        self.assertEqual(['foo'], self.p.match_plugin_disable)
+        self.p.loadMatchMode()
+        self.assertEqual(['foo'], self.p._match_plugin_disable)
 
         # many
         self.conf.loadFromString("""
 [matchmode]
 plugins_disable: foo, bar
         """)
-        self.p.LoadMatchMode()
-        self.assertEqual(['foo', 'bar'], self.p.match_plugin_disable)
+        self.p.loadMatchMode()
+        self.assertEqual(['foo', 'bar'], self.p._match_plugin_disable)
 
 
 
