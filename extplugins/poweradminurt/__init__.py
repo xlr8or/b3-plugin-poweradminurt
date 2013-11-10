@@ -22,11 +22,10 @@ __author__ = 'xlr8or, courgette'
 
 
 """
-
 Depending on the B3 parser loaded, this module will either act as the plugin for
 UrT4.1 or the plugin for UrT4.2
-
 """
+
 
 class PoweradminurtPlugin(object):
 

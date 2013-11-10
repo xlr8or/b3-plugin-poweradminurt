@@ -16,19 +16,27 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
-import b3, time, thread, threading, re
+import b3
 import b3.events
 import b3.plugin
 import b3.cron
-from poweradminurt import __version__, __author__
 
+from poweradminurt import __version__
+from poweradminurt import __author__
+
+import time
+import thread
+import threading
+import re
 import os
 import random
 import string
-import traceback
 import ConfigParser
 
+
 #--------------------------------------------------------------------------------------------------
+
+
 class Poweradminurt41Plugin(b3.plugin.Plugin):
 
     # ClientUserInfo and ClientUserInfoChanged lines return different names, unsanitized and sanitized
@@ -37,11 +45,11 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
     _adminPlugin = None
     _ignoreTill = 0
-    _checkdupes = False
-    _checkunknown = False
-    _checkbadnames = False
-    _checkchanges = False
-    _checkallowedchanges = 0
+    _checkdupes = True
+    _checkunknown = True
+    _checkbadnames = True
+    _checkchanges = True
+    _checkallowedchanges = 7
     _ncronTab = None
     _tcronTab = None
     _scronTab = None
@@ -50,16 +58,20 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
     _tinterval = 0
     _sinterval = 0
     _skinterval = 0
-    _minbalinterval = 0 # minimum time in minutes between !bal or !sk for non-mods
-    _lastbal = 0 # time since last !bal or !sk
+    _minbalinterval = 2  # minimum time in minutes between !bal or !sk for non-mods
+    _lastbal = 0  # time since last !bal or !sk
     _oldadv = (None, None, None)
     _teamred = 0
     _teamblue = 0
-    _teamdiff = 0
+    _teamdiff = 1
+    _skilldiff = 0.5
+    _skill_balance_mode = 0
     _balancing = False
     _origvote = 0
     _lastvote = 0
     _votedelay = 0
+    _tmaxlevel = 20
+    _announce = 2
     _smaxspectime = 0
     _smaxlevel = 0
     _smaxplayers = 0
@@ -70,9 +82,9 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
     _botenable = False
     _botskill = 4
     _botminplayers = 4
-    _botmaps = {}
+    _botmaps = []
     _hsenable = False
-    _hsresetvars = True
+    _hsresetvars = 'map'
     _hsbroadcast = True
     _hsall = True
     _hspercent = True
@@ -95,48 +107,61 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
     _rotation_large = ''
     _gamepath = ''
     _origgear = 0
+    _randnum = 0
+    _pass_lines = None
+    _papublic_password = None
+    _match_plugin_disable = []
+    _gameconfig = {}
     _team_change_force_balance_enable = True
     _teamLocksPermanent = False
     _autobalance_gametypes = 'tdm'
     _autobalance_gametypes_array = []
-    _max_dic_size = 512000 #max dictionary size in bytes
-    _slapSafeLevel = None
+    _max_dic_size = 512000  # max dictionary size in bytes
+    _moon_on_gravity = 100
+    _moon_off_gravity = 800
+    _slapSafeLevel = 60
     _ignorePlus = 30
-    _full_ident_level = 20
+    _full_ident_level = 60
+    _killhistory = []
+    _hitlocations = {}
 
     def __init__(self, console, config=None):
+
         b3.plugin.Plugin.__init__(self, console, config)
         if self.console.gameName != 'iourt41':
             self.critical("unsupported game : %s" % self.console.gameName)
             raise SystemExit(220)
 
         ### hit location constants ###
-        try:
-            self.HL_HEAD = self.console.HL_HEAD
-        except AttributeError, err:
-            self.warning("could not get HL_HEAD value from B3 parser. %s" % err)
-            self.HL_HEAD = '0'
-        self.debug("HL_HEAD is %s" % self.HL_HEAD)
 
         try:
-            self.HL_HELMET = self.console.HL_HELMET
-        except AttributeError, err:
-            self.warning("could not get HL_HELMET value from B3 parser. %s" % err)
-            self.HL_HELMET = '1'
-        self.debug("HL_HELMET is %s" % self.HL_HELMET)
+            self._hitlocations['HL_HEAD'] = self.console.HL_HEAD
+        except AttributeError, e:
+            self._hitlocations['HL_HEAD'] = '0'
+            self.warning("could not get HL_HEAD value from B3 parser: %s" % e)
+
+        self.debug("HL_HEAD is %s" % self._hitlocations['HL_HEAD'])
 
         try:
-            self.HL_TORSO = self.console.HL_TORSO
-        except AttributeError, err:
-            self.warning("could not get HL_TORSO value from B3 parser. %s" % err)
-            self.HL_TORSO = '2'
-        self.debug("HL_TORSO is %s" % self.HL_TORSO)
+            self._hitlocations['HL_HELMET'] = self.console.HL_HELMET
+        except AttributeError, e:
+            self._hitlocations['HL_HELMET'] = '1'
+            self.warning("could not get HL_HELMET value from B3 parser: %s" % e)
+
+        self.debug("HL_HELMET is %s" % self._hitlocations['HL_HELMET'])
+
+        try:
+            self._hitlocations['HL_TORSO'] = self.console.HL_TORSO
+        except AttributeError, e:
+            self._hitlocations['HL_TORSO'] = '2'
+            self.warning("could not get HL_TORSO value from B3 parser: %s" % e)
+
+        self.debug("HL_TORSO is %s" % self._hitlocations['HL_TORSO'])
 
     def startup(self):
         """\
         Initialize plugin settings
         """
-
         # get the admin plugin so we can register commands
         self._adminPlugin = self.console.getPlugin('admin')
         if not self._adminPlugin:
@@ -156,12 +181,13 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 func = self.getCmd(cmd)
                 if func:
                     self._adminPlugin.registerCommand(self, cmd, level, func, alias)
+
         self._adminPlugin.registerCommand(self, 'paversion', 0, self.cmd_paversion, 'paver')
 
-        # Register our events
+        # register our events
         self.registerEvents()
 
-        # Create event
+        # create event
         self.createEvent('EVT_CLIENT_PUBLIC', 'Server Public Mode Changed')
 
         # don't run cron-checks on startup
@@ -169,37 +195,42 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         self._balancing = False
         self._killhistory = []
 
-        # save original vote settings
         try:
+            # save original vote settings
             self._origvote = self.console.getCvar('g_allowvote').getInt()
-        except:
-            self._origvote = 0 # no votes
+        except Exception, e:
+            self.warning("could not retrieve g_allowvote CVAR value: %s" % e)
+            self._origvote = 0  # no votes
 
-        # if by any chance on botstart g_allowvote is 0, we'll use the default UrT value
+        # if by any chance on botstart g_allowvote is 0
+        # we'll use the default UrT value
         if self._origvote == 0:
             self._origvote = 536871039
+
         self._lastvote = self._origvote
 
         # how many players are allowed and if g_maxGameClients != 0 we will disable specchecking
         self._sv_maxclients = self.console.getCvar('sv_maxclients').getInt()
         self._g_maxGameClients = self.console.getCvar('g_maxGameClients').getInt()
 
-        # save original gear settings
         try:
+            # save original gear settings
             self._origgear = self.console.getCvar('g_gear').getInt()
-        except:
-            self._origgear = 0 # allow all weapons
+        except Exception, e:
+            self.warning("could not retrieve g_gear CVAR value: %s" % e)
+            self._origgear = 0  # allow all weapons
 
         self.installCrontabs()
 
         self.debug('Started')
 
-
     def registerEvents(self):
+        """\
+        Register events needed
+        """
         self.verbose('Registering events')
         self.registerEvent(b3.events.EVT_GAME_ROUND_START)
         self.registerEvent(b3.events.EVT_GAME_EXIT)
-        #self.registerEvent(b3.events.EVT_CLIENT_JOIN)
         self.registerEvent(b3.events.EVT_CLIENT_AUTH)
         self.registerEvent(b3.events.EVT_CLIENT_DISCONNECT)
         self.registerEvent(b3.events.EVT_CLIENT_TEAM_CHANGE)
@@ -209,478 +240,687 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         self.registerEvent(b3.events.EVT_CLIENT_KILL_TEAM)
         self.registerEvent(b3.events.EVT_CLIENT_ACTION)
 
-
     def onLoadConfig(self):
-        self.LoadNameChecker()
-        self.LoadTeamBalancer()
-        self.LoadVoteDelayer()
-        self.LoadSpecChecker()
-        self.LoadSkillBalancer()
-        self.LoadMoonMode()
-        self.LoadPublicMode()
-        self.LoadMatchMode()
-        self.LoadBotSupport()
-        self.LoadHeadshotCounter()
-        self.LoadRotationManager()
-        self.LoadSpecial()
+        """\
+        Load the plugin configuration
+        """
+        self.loadNameChecker()
+        self.loadTeamBalancer()
+        self.loadVoteDelayer()
+        self.loadSpecChecker()
+        self.loadSkillBalancer()
+        self.loadMoonMode()
+        self.loadPublicMode()
+        self.loadMatchMode()
+        self.loadBotSupport()
+        self.loadHeadshotCounter()
+        self.loadRotationManager()
+        self.loadSpecial()
 
-    def LoadNameChecker(self):
-        # NAMECHECKING SETUP
+    def loadNameChecker(self):
+        """\
+        Setup the name checker
+        """
         try:
             self._ninterval = self.config.getint('namechecker', 'ninterval')
-        except:
-            self._ninterval = 0
-            self.debug('Using default value (%s) for Names Interval', self._ninterval)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/ninterval in config file, using default: %s' % self._ninterval)
+        except ValueError, e:
+            self.error('Could not load namechecker/ninterval config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/ninterval' % self._ninterval)
 
-        # set a max interval for namechecker
+        # clamp name checker interval
         if self._ninterval > 59:
             self._ninterval = 59
 
         try:
             self._checkdupes = self.config.getboolean('namechecker', 'checkdupes')
-        except:
-            self._checkdupes = True
-            self.debug('Using default value (%s) for checkdupes', self._checkdupes)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/checkdupes in config file, using default: %s' % self._checkdupes)
+        except ValueError, e:
+            self.error('Could not load namechecker/checkdupes config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/checkdupes' % self._checkdupes)
+
         try:
             self._checkunknown = self.config.getboolean('namechecker', 'checkunknown')
-        except:
-            self._checkunknown = True
-            self.debug('Using default value (%s) for checkunknown', self._checkunknown)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/checkunknown in config file, using default: %s' %
+                         self._checkunknown)
+        except ValueError, e:
+            self.error('Could not load namechecker/checkunknown config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/checkunknown' % self._checkunknown)
+
         try:
             self._checkbadnames = self.config.getboolean('namechecker', 'checkbadnames')
-        except:
-            self._checkbadnames = True
-            self.debug('Using default value (%s) for checkbadnames', self._checkbadnames)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/checkbadnames in config file, using default: %s' %
+                         self._checkbadnames)
+        except ValueError, e:
+            self.error('Could not load namechecker/checkbadnames config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/checkbadnames' % self._checkbadnames)
+
         try:
             self._checkchanges = self.config.getboolean('namechecker', 'checkchanges')
-        except:
-            self._checkchanges = True
-            self.debug('Using default value (%s) for checkchanges', self._checkchanges)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/checkchanges in config file, using default: %s' %
+                         self._checkchanges)
+        except ValueError, e:
+            self.error('Could not load namechecker/checkchanges config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/checkchanges' % self._checkchanges)
+
         try:
-            self._checkallowedchanges = self.config.getboolean('namechecker', 'checkallowedchanges')
-        except:
-            self._checkallowedchanges = 7
-            self.debug('Using default value (%s) for checkallowedchanges', self._checkallowedchanges)
+            self._checkallowedchanges = self.config.getint('namechecker', 'checkallowedchanges')
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find namechecker/checkallowedchanges in config file, using default: %s' %
+                         self._checkallowedchanges)
+        except ValueError, e:
+            self.error('Could not load namechecker/checkallowedchanges config value: %s' % e)
+            self.debug('Using default value (%s) for namechecker/checkallowedchanges' % self._checkallowedchanges)
 
-        self.debug('Names Interval: %s' %(self._ninterval))
-        self.debug('Check badnames: %s' %(self._checkbadnames))
-        self.debug('Dupechecking: %s' %(self._checkdupes))
-        self.debug('Check unknowns: %s' %(self._checkunknown))
-        self.debug('Check namechanges: %s' %(self._checkchanges))
-        self.debug('Max. allowed namechanges per game: %s' %(self._checkallowedchanges))
+        self.debug('Name checker interval: %s' % self._ninterval)
+        self.debug('Check bad names: %s' % self._checkbadnames)
+        self.debug('Check duplicate names: %s' % self._checkdupes)
+        self.debug('Check unknown names: %s' % self._checkunknown)
+        self.debug('Check name changes: %s' % self._checkchanges)
+        self.debug('Max. allowed name changes per game: %s' % self._checkallowedchanges)
 
-    def LoadTeamBalancer(self):
-        # TEAMBALANCER SETUP
+    def loadTeamBalancer(self):
+        """\
+        Setup the teambalancer
+        """
         try:
             self._tinterval = self.config.getint('teambalancer', 'tinterval')
-        except:
-            self._tinterval = 0
-            self.debug('Using default value (%s) for Teambalancer Interval', self._tinterval)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/tinterval in config file, using default: %s' % self._tinterval)
+        except ValueError, e:
+            self.error('Could not load teambalancer/tinterval config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/tinterval' % self._tinterval)
 
-        # set a max interval for teamchecker
+        # clamp team balancer interval
         if self._tinterval > 59:
             self._tinterval = 59
 
         try:
             self._teamdiff = self.config.getint('teambalancer', 'teamdifference')
-        except:
-            self._teamdiff = 1
-            self.debug('Using default value (%s) for teamdiff', self._teamdiff)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/teamdifference in config file, using default: %s' %
+                         self._teamdiff)
+        except ValueError, e:
+            self.error('Could not load teambalancer/teamdifference config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/teamdifference' % self._teamdiff)
+
         # set a minimum/maximum teamdifference
         if self._teamdiff < 1:
             self._teamdiff = 1
-        if self._teamdiff > 9:
+        elif self._teamdiff > 9:
             self._teamdiff = 9
 
         try:
             self._tmaxlevel = self.config.getint('teambalancer', 'maxlevel')
-        except:
-            self._tmaxlevel = 20
-            self.debug('Using default value (%s) for tmaxlevel', self._tmaxlevel)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/maxlevel in config file, using default: %s' % self._tmaxlevel)
+        except ValueError, e:
+            self.error('Could not load teambalancer/maxlevel config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/maxlevel' % self._tmaxlevel)
+
         try:
             self._announce = self.config.getint('teambalancer', 'announce')
-        except:
-            self._announce = 2
-            self.debug('Using default value (%s) for announce', self._announce)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/announce in config file, using default: %s' % self._announce)
+        except ValueError, e:
+            self.error('Could not load teambalancer/announce config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/announce' % self._announce)
 
-        self.debug('TeamsInterval: %s' %(self._tinterval))
-        self.debug('Teambalance Difference: %s' %(self._teamdiff))
-        self.debug('Teambalance Maxlevel: %s' %(self._tmaxlevel))
-        self.debug('Teambalance Announce: %s' %(self._announce))
-
-        # 10/21/2008 - 1.4.0b9 - mindriot
         try:
-            self._team_change_force_balance_enable = self.config.getboolean('teambalancer', 'team_change_force_balance_enable')
-        except:
-            self._team_change_force_balance_enable = True
-            self.debug('Using default value (%s) for team_change_force_balance_enable', self._team_change_force_balance_enable)
+            # 10/21/2008 - 1.4.0b9 - mindriot
+            self._team_change_force_balance_enable = self.config.getboolean('teambalancer',
+                                                                            'team_change_force_balance_enable')
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/team_change_force_balance_enable in config file, \
+                          using default: %s' % self._team_change_force_balance_enable)
+        except ValueError, e:
+            self.error('Could not load teambalancer/team_change_force_balance_enable config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/team_change_force_balance_enable' %
+                       self._team_change_force_balance_enable)
 
-        # 10/22/2008 - 1.4.0b10 - mindriot
         try:
+            # 10/22/2008 - 1.4.0b10 - mindriot
             self._autobalance_gametypes = self.config.get('teambalancer', 'autobalance_gametypes')
-        except:
-            self._autobalance_gametypes = 'tdm'
-            self.debug('Using default value (%s) for autobalance_gametypes', self._autobalance_gametypes)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/autobalance_gametypes in config file, '
+                         'using default: %s' % self._autobalance_gametypes)
 
         self._autobalance_gametypes = self._autobalance_gametypes.lower()
         self._autobalance_gametypes_array = re.split(r'[\s,]+', self._autobalance_gametypes)
 
         try:
             self._teamLocksPermanent = self.config.getboolean('teambalancer', 'teamLocksPermanent')
-        except:
-            self._teamLocksPermanent = False
-            self.debug('Using default value (%s) for teamLocksPermanent', self._teamLocksPermanent)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/teamLocksPermanent in config file, '
+                         'using default: %s' % self._teamLocksPermanent)
+        except ValueError, e:
+            self.error('Could not load teambalancer/teamLocksPermanent config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/teamLocksPermanent' % self._teamLocksPermanent)
 
         try:
             self._ignorePlus = self.config.getint('teambalancer', 'timedelay')
-        except:
-            self.debug('Using default value (%s) for timedelay', self._ignorePlus)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find teambalancer/timedelay in config file, using default: %s' % self._ignorePlus)
+        except ValueError, e:
+            self.warning('Could not load teambalancer/timedelay config value: %s' % e)
+            self.debug('Using default value (%s) for teambalancer/timedelay' % self._ignorePlus)
 
-    def LoadSkillBalancer(self):
-        # SKILLBALANCER SETUP
+        self.debug('Teambalance interval: %s' % self._tinterval)
+        self.debug('Teambalance difference: %s' % self._teamdiff)
+        self.debug('Teambalance max level: %s' % self._tmaxlevel)
+        self.debug('Teambalance announce: %s' % self._announce)
+        self.debug('Team change force balance enable: %s' % self._team_change_force_balance_enable)
+        self.debug('Team locks permanent: %s' % self._teamLocksPermanent)
+        self.debug('Time delay: %s' % self._ignorePlus)
+        self.debug('Autobalance gametypes: %s' % self._autobalance_gametypes)
+
+    def loadSkillBalancer(self):
+        """\
+        Setup the skill balancer
+        """
         try:
             self._skinterval = self.config.getint('skillbalancer', 'interval')
-        except:
-            self._skinterval = 0
-            self.debug('Using default value (%s) for Skillbalancer Interval', self._skinterval)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find skillbalancer/interval in config file, using default: %s' % self._skinterval)
+        except ValueError, e:
+            self.error('Could not load skillbalancer/interval config value: %s' % e)
+            self.debug('Using default value (%s) for skillbalancer/interval' % self._skinterval)
 
-        # set a max interval for skillchecker
+        # clamp skill balancer interval
         if self._skinterval > 59:
             self._skinterval = 59
 
         try:
-            self._skilldiff = self.config.getint('skillbalancer', 'difference')
-        except:
-            self._skilldiff = 0.5
-            self.debug('Using default value (%s) for skilldiff', self._skilldiff)
-        # set a minimum/maximum teamdifference
+            self._skilldiff = self.config.getfloat('skillbalancer', 'difference')
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find skillbalancer/difference in config file, using default: %s' % self._skilldiff)
+        except ValueError, e:
+            self.error('Could not load skillbalancer/difference config value: %s' % e)
+            self.debug('Using default value (%s) for skillbalancer/difference' % self._skilldiff)
+
+        # clamp skill difference
         if self._skilldiff < 0.1:
             self._skilldiff = 0.1
-        if self._skilldiff > 9:
+        elif self._skilldiff > 9:
             self._skilldiff = 9
 
         try:
             self._skill_balance_mode = self.config.getint('skillbalancer', 'mode')
-        except:
-            self._skill_balance_mode = 0
-            self.debug('Using default value (%s) for skill_balance_mode', self._skill_balance_mode)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find skillbalancer/mode in config file, using default: %s' %
+                         self._skill_balance_mode)
+        except ValueError, e:
+            self.error('Could not load skillbalancer/mode config value: %s' % e)
+            self.debug('Using default value (%s) for skillbalancer/mode' % self._skill_balance_mode)
 
         try:
             self._minbalinterval = self.config.getint('skillbalancer', 'min_bal_interval')
-        except:
-            self._minbalinterval = 2
-            self.debug('Using default value (%s) for Skillbalancer Manual Balance Interval', self._minbalinterval)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find skillbalancer/min_bal_interval in config file, using default: %s' %
+                         self._minbalinterval)
+        except ValueError, e:
+            self.warning('Could not load skillbalancer/min_bal_interval config value: %s' % e)
+            self.debug('Using default value (%s) for skillbalancer/min_bal_interval' % self._minbalinterval)
 
-    def LoadVoteDelayer(self):
-        #VOTEDELAYER SETUP
+        self.debug('Skillbalance interval: %s' % self._skinterval)
+        self.debug('Skillbalance difference: %s' % self._skilldiff)
+        self.debug('Skillbalance mode: %s' % self._skill_balance_mode)
+        self.debug('Minimum skillbalance interval: %s' % self._minbalinterval)
+
+    def loadVoteDelayer(self):
+        """\
+        Setup the vote delayer
+        """
         try:
             self._votedelay = self.config.getint('votedelay', 'votedelay')
-        except:
-            self._votedelay = 0
-            self.debug('Using default value (%s) for Vote delayer', self._votedelay)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find votedelay/votedelay in config file, using default: %s' % self._votedelay)
+        except ValueError, e:
+            self.warning('Could not load votedelay/votedelay config value: %s' % e)
+            self.debug('Using default value (%s) for votedelay/votedelay' % self._votedelay)
+
         # set a max delay, setting it larger than timelimit would be foolish
         timelimit = self.console.getCvar('timelimit').getInt()
+
         if timelimit == 0 and self._votedelay != 0:
             # endless map or frag limited settings
             self._votedelay = 10
         elif self._votedelay >= timelimit - 1:
             # don't overlap rounds
             self._votedelay = timelimit - 1
-        self.debug('Vote delay: %s' %(self._votedelay))
 
-    def LoadSpecChecker(self):
-        # SPECTATOR CHECK SETUP
+        self.debug('Vote delay: %s' % self._votedelay)
+
+    def loadSpecChecker(self):
+        """\
+        Setup the spec checker
+        """
         try:
             self._sinterval = self.config.getint('speccheck', 'sinterval')
-        except:
-            self._sinterval = 0
-            self.debug('Using default value (%s) for speccheck interval', self._sinterval)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find speccheck/sinterval in config file, using default: %s' % self._sinterval)
+        except ValueError, e:
+            self.error('Could not load speccheck/sinterval config value: %s' % e)
+            self.debug('Using default value (%s) for speccheck/sinterval' % self._sinterval)
+
         try:
             self._smaxspectime = self.config.getint('speccheck', 'maxspectime')
-        except:
-            self._smaxspectime = 0
-            self.debug('Using default value (%s) for speccheck smaxspectime', self._smaxspectime)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find speccheck/maxspectime in config file, using default: %s' % self._smaxspectime)
+        except ValueError, e:
+            self.error('Could not load speccheck/maxspectime e config value: %s' % e)
+            self.debug('Using default value (%s) for speccheck/maxspectime ' % self._smaxspectime)
+
         try:
+            # loading spec max level configuration value
             self._smaxlevel = self.config.getint('speccheck', 'maxlevel')
-        except:
-            self._smaxlevel = 0
-            self.debug('Using default value (%s) for speccheck maxlevel', self._smaxlevel)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find speccheck/maxlevel in config file, using default: %s' % self._smaxlevel)
+        except ValueError, e:
+            self.error('Could not load speccheck/maxlevel config value: %s' % e)
+            self.debug('Using default value (%s) for speccheck/maxlevel' % self._smaxlevel)
+
         try:
             self._smaxplayers = self.config.getint('speccheck', 'maxplayers')
-        except:
-            #self._smaxplayers = 10
-            #self.debug('Using default value (%s) for speccheck maxplayers', self._smaxplayers)
-            self._smaxplayers = self.console.getCvar('sv_maxclients').getInt() - self.console.getCvar('sv_privateClients').getInt()
-            self.debug('Using default server value (sv_maxclients - sv_privateClients = %s) for speccheck maxplayers', self._smaxplayers)
+        except (ConfigParser.NoOptionError, ValueError), e:
+            if isinstance(e, ConfigParser.NoOptionError):
+                self.warning('Could not find speccheck/maxplayers in config file')
+            elif isinstance(e, ValueError):
+                self.error('Could not load speccheck/maxplayers config value: %s' % e)
 
-        self.debug('Speccheck interval: %s' %(self._sinterval))
-        self.debug('Max Spectime: %s' %(self._smaxspectime))
-        self.debug('Speccheck Maxlevel: %s' %(self._smaxlevel))
-        self.debug('Maxplayers: %s' %(self._smaxplayers))
+            # load default value according to server configuration
+            maxclients = self.console.getCvar('sv_maxclients').getInt()
+            pvtclients = self.console.getCvar('sv_privateClients').getInt()
+            self._smaxplayers = maxclients - pvtclients
+            self.debug('using default server value (sv_maxclients - sv_privateClients = %s) for \
+                        speccheck/maxplayers' % self._smaxplayers)
 
-    def LoadMoonMode(self):
-        #MOON MODE SETUP
+        self.debug('Speccheck interval: %s' % self._sinterval)
+        self.debug('Max spec time: %s' % self._smaxspectime)
+        self.debug('Speccheck max level: %s' % self._smaxlevel)
+        self.debug('Spec max players: %s' % self._smaxplayers)
+
+    def loadMoonMode(self):
+        """\
+        Setup the moon mode
+        """
         try:
             self._moon_on_gravity = self.config.getint('moonmode', 'gravity_on')
-        except:
-            self._moon_on_gravity = 100
-            self.debug('Using default value (%s) for moon mode ON', self._moon_on_gravity)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find moonmode/gravity_on in config file, using default: %s' % self._moon_on_gravity)
+        except ValueError, e:
+            self.error('Could not load moonmode/gravity_on config value: %s' % e)
+            self.debug('Using default value (%s) for moonmode/gravity_on' % self._moon_on_gravity)
+
         try:
             self._moon_off_gravity = self.config.getint('moonmode', 'gravity_off')
-        except:
-            self._moon_off_gravity = 800
-            self.debug('Using default value (%s) for moon mode OFF', self._moon_off_gravity)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find moonmode/gravity_off in config file, using default: %s' %
+                         self._moon_off_gravity)
+        except ValueError, e:
+            self.error('Could not load moonmode/gravity_off config value: %s' % e)
+            self.debug('Using default value (%s) for moonmode/gravity_off' % self._moon_off_gravity)
 
         self.debug('Moon ON gravity: %s' % self._moon_on_gravity)
         self.debug('Moon OFF gravity: %s' % self._moon_off_gravity)
 
-    def LoadPublicMode(self):
-        # PUBLIC MODE SETUP
+    def loadPublicMode(self):
+        """\
+        Setup the public mode
+        """
         try:
-            self.randnum = self.config.getint('publicmode','randnum')
-        except:
-            self.randnum = 0
+            self._randnum = self.config.getint('publicmode', 'randnum')
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find publicmode/randnum in config file, using default: %s' % self._randnum)
+        except ValueError, e:
+            self.error('Could not load publicmode/randnum config value: %s' % e)
+            self.debug('Using default value (%s) for publicmode/randnum' % self._randnum)
 
         try:
-            self.pass_lines = None
+
             try:
-                padic = self.config.getboolean('publicmode','usedic')
+                padic = self.config.getboolean('publicmode', 'usedic')
             except ConfigParser.NoOptionError:
-                self.warning("cannot find publicmode/usedic in config file, using default : no")
                 padic = False
-            except ValueError, err:
-                self.error("cannot read publicmode/usedic in config file, using default : no")
-                self.debug(err)
+                self.warning('Could not find publicmode/usedic in config file, using default: %s' % padic)
+            except ValueError, e:
                 padic = False
+                self.error('Could not load publicmode/usedic config value: %s' % e)
+                self.debug('Using default value (%s) for publicmode/usedic' % padic)
 
             if padic:
-                padicfile = self.config.getpath('publicmode','dicfile')
+
+                padicfile = self.config.getpath('publicmode', 'dicfile')
                 self.debug('trying to use password dictionnary %s' % padicfile)
                 if os.path.exists(padicfile):
                     stinfo = os.stat(padicfile)
                     if stinfo.st_size > self._max_dic_size:
-                        self.warning('The dictionary file is too big. Switching to default.')
+                        self.warning('dictionary file is too big: switching to default')
                     else:
                         dicfile = open(padicfile)
                         text = dicfile.read().strip()
                         dicfile.close()
                         if text == "":
-                            self.warning('Dictionary file is empty. Switching to default.')
+                            self.warning('dictionary file is empty: switching to default')
                         else:
-                            self.pass_lines = text.splitlines()
-                    self.debug('Using dictionary password.')
+                            self._pass_lines = text.splitlines()
+
+                    self.debug('using dictionary password')
+
                 else:
-                    self.warning('Dictionary is enabled but the file doesn\'t exists. Switching to default.')
-        except:
-            traceback.print_exc()
-            self.debug('Cannot load dictionary config. Using default')
+                    self.warning('dictionary is enabled but the file doesn\'t exists: switching to default')
+
+        except Exception, e:
+            self.error('Could not load dictionary config: %s' % e)
+            self.debug('using default dictionary')
 
         try:
+
             self._papublic_password = self.config.get('publicmode', 'g_password')
             if self._papublic_password is None:
-                self.warning('Can\'t setup papublic command because there is no password set in config')
-        except:
-            self._papublic_password = None
-            self.debug('Can\'t setup papublic command because there is no password set in config')
-        self.debug('papublic password set to : %s' %(self._papublic_password))
+                self.warning('could not setup papublic command because there is no password set in config')
 
-    def LoadMatchMode(self):
-        # MATCH MODE SETUP
-        self.match_plugin_disable = []
-        try:
-            self.debug('matchmode/plugins_disable : %s' % self.config.get('matchmode', 'plugins_disable'))
-            self.match_plugin_disable = [x for x in re.split('\W+', self.config.get('matchmode', 'plugins_disable')) if x]
         except ConfigParser.NoOptionError:
-            self.warning(r"cannot find option 'matchmode/plugins_disable' in your config file")
+            self.debug('could not setup papublic command because there is no password set in config')
 
-        self.gameconfig = {}
+        self.debug('papublic password set to : %s' % self._papublic_password)
+
+    def loadMatchMode(self):
+        """\
+        Setup the match mode
+        """
         try:
+            # load a list of plugins to be disabled/enabled upon match mode enabled/disabled
+            self.debug('matchmode/plugins_disable : %s' % self.config.get('matchmode', 'plugins_disable'))
+            self._match_plugin_disable = [x for x in re.split('\W+',
+                                                              self.config.get('matchmode', 'plugins_disable')) if x]
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find matchmode/plugins_disable in config file')
+
+        try:
+
+            # load all the configuration files into a dict
             for key, value in self.config.items('matchmode_configs'):
-                self.gameconfig[key] = value
-        except:
-            self.warning('Can\'t read matchmode_configs')
+                self._gameconfig[key] = value
 
+        except KeyError, e:
+            self.warning('could not read matchmode configs: %s' % e)
 
-    def LoadBotSupport(self):
-        # BOT SUPPORT SETUP
+    def loadBotSupport(self):
+        """\
+        Setup the bot support
+        """
         try:
             self._botenable = self.config.getboolean('botsupport', 'bot_enable')
-        except:
-            self._botenable = False
-            self.debug('Using default value (%s) for bot enable', self._botenable)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find botsupport/bot_enable in config file, using default: %s' % self._botenable)
+        except ValueError, e:
+            self.error('Could not load botsupport/bot_enable config value: %s' % e)
+            self.debug('Using default value (%s) for botsupport/bot_enable' % self._botenable)
+
         try:
             self._botskill = self.config.getint('botsupport', 'bot_skill')
-            if self._botskill > 5:
-                self._botskill = 5
-            elif self._botskill < 1:
-                self._botskill = 1
-        except:
-            self._botskill = 4
-            self.debug('Using default value (%s) for bot skill', self._botskill)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find botsupport/bot_skill in config file, using default: %s' % self._botskill)
+        except ValueError, e:
+            self.error('Could not load botsupport/bot_skill config value: %s' % e)
+            self.debug('Using default value (%s) for botsupport/bot_skill' % self._botskill)
+
+        # clamp botskill value
+        if self._botskill > 5:
+            self._botskill = 5
+        elif self._botskill < 1:
+            self._botskill = 1
+
         try:
             self._botminplayers = self.config.getint('botsupport', 'bot_minplayers')
-            if self._botminplayers > 16:
-                self._botminplayers = 16
-            elif self._botminplayers < 0:
-                self._botminplayers = 0
-        except:
-            self._botminplayers = 4
-            self.debug('Using default value (%s) for bot minimum players', self._botminplayers)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find botsupport/bot_minplayers in config file, '
+                         'using default: %s' % self._botminplayers)
+        except ValueError, e:
+            self.error('Could not load botsupport/bot_minplayers config value: %s' % e)
+            self.debug('Using default value (%s) for botsupport/bot_minplayers' % self._botminplayers)
+
+        # clamp botminplayers value
+        if self._botminplayers > 16:
+            self._botminplayers = 16
+        elif self._botminplayers < 0:
+            self._botminplayers = 0
+
         try:
             maps = self.config.get('botsupport', 'bot_maps')
             maps = maps.split(' ')
             self._botmaps = maps
-        except:
-            self._botmaps = {}
-            self.debug('No maps for botsupport...')
+        except ConfigParser.NoOptionError:
+            self.debug('no map specified for botsupport...')
 
         if self._botenable:
             # if it isn't enabled already it takes a mapchange to activate
             self.console.write('set bot_enable 1')
-        # set the correct botskill anyway
-        self.console.write('set g_spskill %s' %(self._botskill))
 
-        self.debug('Bot enable: %s' %(self._botenable))
-        self.debug('Bot skill: %s' %(self._botskill))
-        self.debug('Bot minplayers: %s' %(self._botminplayers))
-        self.debug('Bot maps: %s' %(self._botmaps))
+        # set the correct botskill anyway
+        self.console.write('set g_spskill %s' % self._botskill)
+
+        self.debug('Bot enable: %s' % self._botenable)
+        self.debug('Bot skill: %s' % self._botskill)
+        self.debug('Bot minplayers: %s' % self._botminplayers)
+        self.debug('Bot maps: %s' % self._botmaps)
 
         # first check for botsupport
         self.botsupport()
 
-    def LoadHeadshotCounter(self):
-        # HEADSHOT COUNTER SETUP
+    def loadHeadshotCounter(self):
+        """\
+        Setup the headshot counter
+        """
         try:
             self._hsenable = self.config.getboolean('headshotcounter', 'hs_enable')
-        except:
-            self._hsenable = False
-            self.debug('Using default value (%s) for hs_enable', self._hsenable)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/hs_enable in config file, using default: %s' % self._hsenable)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/hs_enable config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/hs_enable' % self._hsenable)
+
         try:
             self._hsresetvars = self.config.get('headshotcounter', 'reset_vars')
             if not self._hsresetvars in ['no', 'map', 'round']:
-                raise Exception('Config setting not valid.')
-        except:
-            self._hsresetvars = 'map'
-            self.debug('Using default value (%s) for reset_vars', self._hsresetvars)
+                raise KeyError('configuration setting not valid')
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/reset_vars in config file, using default: %s' %
+                         self._hsresetvars)
+        except KeyError, e:
+            self.error('Could not load headshotcounter/reset_vars config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/reset_vars' % self._hsresetvars)
+
         try:
             self._hsbroadcast = self.config.getboolean('headshotcounter', 'broadcast')
-        except:
-            self._hsbroadcast = True
-            self.debug('Using default value (%s) for broadcast', self._hsbroadcast)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/broadcast in config file, using default: %s' %
+                         self._hsbroadcast)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/broadcast config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/broadcast' % self._hsbroadcast)
+
         try:
             self._hsall = self.config.getboolean('headshotcounter', 'announce_all')
-        except:
-            self._hsall = True
-            self.debug('Using default value (%s) for announce_all', self._hsall)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/announce_all in config file, using default: %s' % self._hsall)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/announce_all config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/announce_all' % self._hsall)
+
         try:
             self._hspercent = self.config.getboolean('headshotcounter', 'announce_percentages')
-        except:
-            self._hspercent = True
-            self.debug('Using default value (%s) for announce_percentages', self._hspercent)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/announce_percentages in config file, using default: %s' %
+                         self._hspercent)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/announce_percentages config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/announce_percentages' % self._hspercent)
+
         try:
             self._hspercentmin = self.config.getint('headshotcounter', 'percent_min')
-        except:
-            self._hspercentmin = 20
-            self.debug('Using default value (%s) for percent_min', self._hspercentmin)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/percent_min in config file, using default: %s' %
+                         self._hspercentmin)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/percent_min config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/percent_min' % self._hspercentmin)
+
         try:
             self._hswarnhelmet = self.config.getboolean('headshotcounter', 'warn_helmet')
-        except:
-            self._hswarnhelmet = True
-            self.debug('Using default value (%s) for warn_helmet', self._hswarnhelmet)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/warn_helmet in config file, using default: %s' %
+                         self._hswarnhelmet)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/warn_helmet config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/warn_helmet' % self._hswarnhelmet)
+
         try:
             self._hswarnhelmetnr = self.config.getint('headshotcounter', 'warn_helmet_nr')
-        except:
-            self._hswarnhelmetnr = 7
-            self.debug('Using default value (%s) for warn_helmet_nr', self._hswarnhelmetnr)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/warn_helmet_nr in config file, using default: %s' %
+                         self._hswarnhelmetnr)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/warn_helmet_nr config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/warn_helmet_nr' % self._hswarnhelmetnr)
+
         try:
             self._hswarnkevlar = self.config.getboolean('headshotcounter', 'warn_kevlar')
-        except:
-            self._hswarnkevlar = True
-            self.debug('Using default value (%s) for warn_kevlar', self._hswarnkevlar)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/warn_kevlar in config file, using default: %s' %
+                         self._hswarnkevlar)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/warn_kevlar config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/warn_kevlar' % self._hswarnkevlar)
+
         try:
             self._hswarnkevlarnr = self.config.getint('headshotcounter', 'warn_kevlar_nr')
-        except:
-            self._hswarnkevlarnr = 50
-            self.debug('Using default value (%s) for warn_kevlar_nr', self._hswarnkevlarnr)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find headshotcounter/warn_kevlar_nr in config file, using default: %s' %
+                         self._hswarnkevlarnr)
+        except ValueError, e:
+            self.error('Could not load headshotcounter/warn_kevlar_nr config value: %s' % e)
+            self.debug('Using default value (%s) for headshotcounter/warn_kevlar_nr' % self._hswarnkevlarnr)
+
         # making shure loghits is enabled to count headshots
         if self._hsenable:
             self.console.write('set g_loghits 1')
 
-        self.debug('Headshotcounter enable: %s' %(self._hsenable))
-        self.debug('Broadcasting: %s' %(self._hsbroadcast))
-        self.debug('Announce all: %s' %(self._hsall))
-        self.debug('Announce percentages: %s' %(self._hspercent))
-        self.debug('Minimum percentage: %s' %(self._hspercentmin))
-        self.debug('Warn to use helmet: %s' %(self._hswarnhelmet))
-        self.debug('Warn after nr of hits in the head: %s' %(self._hswarnhelmetnr))
-        self.debug('Warn to use kevlar: %s' %(self._hswarnkevlar))
-        self.debug('Warn after nr of hits in the torso: %s' %(self._hswarnkevlarnr))
+        self.debug('Headshotcounter enable: %s' % self._hsenable)
+        self.debug('Broadcasting: %s' % self._hsbroadcast)
+        self.debug('Announce all: %s' % self._hsall)
+        self.debug('Announce percentages: %s' % self._hspercent)
+        self.debug('Minimum percentage: %s' % self._hspercentmin)
+        self.debug('Warn to use helmet: %s' % self._hswarnhelmet)
+        self.debug('Warn after nr of hits in the head: %s' % self._hswarnhelmetnr)
+        self.debug('Warn to use kevlar: %s' % self._hswarnkevlar)
+        self.debug('Warn after nr of hits in the torso: %s' % self._hswarnkevlarnr)
 
-    def LoadRotationManager(self):
-        # ROTATION MANAGER SETUP
+    def loadRotationManager(self):
+        """\
+        Setup the rotation manager
+        """
         try:
             self._rmenable = self.config.getboolean('rotationmanager', 'rm_enable')
-        except:
-            pass
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find rotationmanager/rm_enable in config file, using default: %s' % self._rmenable)
+        except ValueError, e:
+            self.error('Could not load rotationmanager/rm_enable config value: %s' % e)
+            self.debug('Using default value (%s) for rotationmanager/rm_enable' % self._rmenable)
+
         if self._rmenable:
+
             try:
                 self._switchcount1 = self.config.getint('rotationmanager', 'switchcount1')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/switchcount1 in config file, using default: %s' %
+                             self._switchcount1)
+            except ValueError, e:
+                self.error('Could not load rotationmanager/switchcount1 config value: %s' % e)
+                self.debug('Using default value (%s) for rotationmanager/switchcount1' % self._switchcount1)
+
             try:
-                self._switchcount2 = self.config.getint('rotationmanager', 'switchcount2')
-            except:
-                pass
+                self._switchcount2 = self.config.getint('rotationmanager', 'switchcount3')
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/switchcount2 in config file, using default: %s' %
+                             self._switchcount2)
+            except ValueError, e:
+                self.error('Could not load rotationmanager/switchcount2 config value: %s' % e)
+                self.debug('Using default value (%s) for rotationmanager/switchcount2' % self._switchcount2)
+
             try:
                 self._hysteresis = self.config.getint('rotationmanager', 'hysteresis')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/hysteresis in config file, using default: %s' %
+                             self._hysteresis)
+            except ValueError, e:
+                self.error('Could not load rotationmanager/hysteresis config value: %s' % e)
+                self.debug('Using default value (%s) for rotationmanager/hysteresis' % self._hysteresis)
+
             try:
                 self._rotation_small = self.config.get('rotationmanager', 'smallrotation')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/smallrotation in config file')
+
             try:
                 self._rotation_medium = self.config.get('rotationmanager', 'mediumrotation')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/mediumrotation in config file')
+
             try:
                 self._rotation_large = self.config.get('rotationmanager', 'largerotation')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/largerotation in config file')
+
             try:
                 self._gamepath = self.config.get('rotationmanager', 'gamepath')
-            except:
-                pass
+            except ConfigParser.NoOptionError:
+                self.warning('Could not find rotationmanager/gamepath in config file')
 
             self.debug('Rotation Manager is enabled')
-            self.debug('Switchcount 1: %s' %(self._switchcount1))
-            self.debug('Switchcount 2: %s' %(self._switchcount2))
-            self.debug('Hysteresis: %s' %(self._hysteresis))
-            self.debug('Rotation small: %s' %(self._rotation_small))
-            self.debug('Rotation medium: %s' %(self._rotation_medium))
-            self.debug('Rotation large: %s' %(self._rotation_large))
+            self.debug('Switchcount 1: %s' % self._switchcount1)
+            self.debug('Switchcount 2: %s' % self._switchcount2)
+            self.debug('Hysteresis: %s' % self._hysteresis)
+            self.debug('Rotation small: %s' % self._rotation_small)
+            self.debug('Rotation medium: %s' % self._rotation_medium)
+            self.debug('Rotation large: %s' % self._rotation_large)
+            self.debug('Game path: %s' % self._gamepath)
         else:
             self.debug('Rotation Manager is disabled')
 
-
-    def LoadSpecial(self):
+    def loadSpecial(self):
+        """\
+        Setup special configs
+        """
         try:
             self._slapSafeLevel = self.config.getint('special', 'slap_safe_level')
-        except Exception, err:
-            self._slapSafeLevel = 60
-            self.warning('Using default value (%s) for slap_safe_level. %s' % (self._slapSafeLevel, err))
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find special/slap_safe_level in config file, using default: %s' %
+                         self._slapSafeLevel)
+        except ValueError, e:
+            self.error('Could not load special/slap_safe_level config value: %s' % e)
+            self.debug('Using default value (%s) for special/slap_safe_level' % self._slapSafeLevel)
 
         try:
             self._full_ident_level = self.config.getint('special', 'paident_full_level')
-        except Exception, err:
-            self._full_ident_level = 60
-            self.warning('Using default value (%s) for paident_full_level. %s' % (self._full_ident_level, err))
-
-
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find special/paident_full_level in config file, using default: %s' %
+                         self._full_ident_level)
+        except ValueError, e:
+            self.error('Could not load special/paident_full_level config value: %s' % e)
+            self.debug('Using default value (%s) for special/paident_full_level' % self._full_ident_level)
 
     def installCrontabs(self):
-        # CRONTABS INSTALLATION
-        # Cleanup and Create the crontabs
+        """\
+        CRONTABS INSTALLATION
+        Cleanup and Create the crontabs
+        """
         if self._ncronTab:
             # remove existing crontab
             self.console.cron - self._ncronTab
@@ -694,16 +934,16 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             # remove existing crontab
             self.console.cron - self._skcronTab
         if self._ninterval > 0:
-            self._ncronTab = b3.cron.PluginCronTab(self, self.namecheck, 0, '*/%s' % (self._ninterval))
+            self._ncronTab = b3.cron.PluginCronTab(self, self.namecheck, 0, '*/%s' % self._ninterval)
             self.console.cron + self._ncronTab
         if self._tinterval > 0:
-            self._tcronTab = b3.cron.PluginCronTab(self, self.teamcheck, 0, '*/%s' % (self._tinterval))
+            self._tcronTab = b3.cron.PluginCronTab(self, self.teamcheck, 0, '*/%s' % self._tinterval)
             self.console.cron + self._tcronTab
         if self._sinterval > 0:
-            self._scronTab = b3.cron.PluginCronTab(self, self.speccheck, 0, '*/%s' % (self._sinterval))
+            self._scronTab = b3.cron.PluginCronTab(self, self.speccheck, 0, '*/%s' % self._sinterval)
             self.console.cron + self._scronTab
         if self._skinterval > 0:
-            self._skcronTab = b3.cron.PluginCronTab(self, self.skillcheck, 0, '*/%s' % (self._skinterval))
+            self._skcronTab = b3.cron.PluginCronTab(self, self.skillcheck, 0, '*/%s' % self._skinterval)
             self.console.cron + self._skcronTab
 
     def getCmd(self, cmd):
@@ -714,7 +954,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         return None
 
-
     def onEvent(self, event):
         """\
         Handle intercepted events
@@ -722,73 +961,90 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         if event.type == b3.events.EVT_CLIENT_DISCONNECT:
             if self._rmenable and self.console.time() > self._dontcount and self._mapchanged:
                 self._playercount -= 1
-                self.debug('PlayerCount: %s' % (self._playercount))
+                self.debug('PlayerCount: %s' % self._playercount)
                 self.adjustrotation(-1)
+
         elif event.type == b3.events.EVT_CLIENT_AUTH:
             if self._hsenable:
                 self.setupVars(event.client)
             if self._rmenable and self.console.time() > self._dontcount and self._mapchanged:
                 self._playercount += 1
-                self.debug('PlayerCount: %s' % (self._playercount))
+                self.debug('PlayerCount: %s' % self._playercount)
                 self.adjustrotation(+1)
+
         elif event.type == b3.events.EVT_CLIENT_TEAM_CHANGE:
             self.onTeamChange(event.data, event.client)
+
         elif event.type == b3.events.EVT_CLIENT_DAMAGE:
             self.headshotcounter(event.client, event.target, event.data)
+
         elif event.type == b3.events.EVT_GAME_EXIT:
             self._mapchanged = True
             if self._botenable:
                 self.botsdisable()
+
             self.ignoreSet(self._ignorePlus)
+
             # reset headshotcounter (per map) if applicable
             if self._hsresetvars == 'map':
                 self.resetVars()
-            # reset number of Namechanges per client
+
+            # reset number of name changes per client
             self.resetNameChanges()
             if not self._teamLocksPermanent:
                 # release TeamLocks
                 self.resetTeamLocks()
-            #Setup timer for recounting players
+
+            # setup timer for recounting players
             if self._rmenable:
-                time = 60
-                self._dontcount = self.console.time() + time
-                t2 = threading.Timer(time, self.recountplayers)
-                self.debug('Starting RecountPlayers Timer: %s seconds' % (time))
+                tm = 60
+                self._dontcount = self.console.time() + tm
+                t2 = threading.Timer(tm, self.recountplayers)
+                self.debug('Starting RecountPlayers Timer: %s seconds' % tm)
                 t2.start()
+
         elif event.type == b3.events.EVT_GAME_ROUND_START:
             self._forgetTeamContrib()
             self._killhistory = []
             self._lastbal = self.console.time()
+
             # check for botsupport
             if self._botenable:
                 self.botsdisable()
                 self.botsupport()
+
             # reset headshotcounter (per round) if applicable
             if self._hsresetvars == 'round':
                 self.resetVars()
+
             # ignore teambalance checking for 1 minute
             self.ignoreSet(self._ignorePlus)
             self._teamred = 0
             self._teamblue = 0
+
             # vote delay init
             if self._votedelay > 0 and self.console.getCvar('g_allowvote').getInt() != 0:
                 # delay voting
                 data = 'off'
                 self.votedelay(data)
                 # re-enable voting
-                time = self._votedelay * 60
-                t1 = threading.Timer(time, self.votedelay)
-                self.debug('Starting Vote delay Timer: %s seconds' % (time))
+                tm = self._votedelay * 60
+                t1 = threading.Timer(tm, self.votedelay)
+                self.debug('Starting Vote delay Timer: %s seconds' % tm)
                 t1.start()
-            # recount players
+
         elif event.type == b3.events.EVT_CLIENT_NAME_CHANGE:
             self.onNameChange(event.data, event.client)
+
         elif event.type == b3.events.EVT_CLIENT_KILL:
             self.onKill(event.client, event.target, int(event.data[0]))
+
         elif event.type == b3.events.EVT_CLIENT_KILL_TEAM:
             self.onKillTeam(event.client, event.target, int(event.data[0]))
+
         elif event.type == b3.events.EVT_CLIENT_ACTION:
             self.onAction(event.client, event.data)
+
         else:
             self.dumpEvent(event)
 
@@ -811,10 +1067,13 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
     def dumpEvent(self, event):
         self.debug('poweradminurt.dumpEvent -- Type %s, Client %s, Target %s, Data %s',
-          event.type, event.client, event.target, event.data)
+                   event.type, event.client, event.target, event.data)
 
     def _teamvar(self, client, var):
-        # return how much variable has changed since player joined its team
+        """\
+        Return how much variable has changed
+        since player joined its team
+        """
         old = client.var(self, 'prev_' + var, 0).value
         new = client.var(self, var, 0).value
         return new - old
@@ -840,13 +1099,13 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             deaths = max(0, self._teamvar(c, 'deaths'))
             teamkills = max(0, self._teamvar(c, 'teamkills'))
             hs = self._teamvar(c, 'headhits') + self._teamvar(c, 'helmethits')
-            hsratio = min(1.0, hs / (1.0 + kills)) # hs can be greater than kills
+            hsratio = min(1.0, hs / (1.0 + kills))  # hs can be greater than kills
             killratio = kills / (1.0 + deaths + teamkills)
             teamcontrib = (kills - deaths - teamkills) / (age + 1.0)
-            flag_taken = int(bool(c.var(self, 'flag_taken', 0).value)) # one-time bonus
+            flag_taken = int(bool(c.var(self, 'flag_taken', 0).value))  # one-time bonus
             flag_captured = self._teamvar(c, 'flag_captured')
             flag_returned = self._teamvar(c, 'flag_returned')
-            flagperf = 10*flag_taken + 20*flag_captured + flag_returned
+            flagperf = 10 * flag_taken + 20 * flag_captured + flag_returned
             bomb_planted = self._teamvar(c, 'bomb_planted')
             bomb_defused = self._teamvar(c, 'bomb_defused')
             bombperf = bomb_planted + bomb_defused
@@ -858,7 +1117,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 'teamcontrib': teamcontrib,
                 'flagperf': flagperf,
                 'bombperf': bombperf,
-                }
+            }
+
             stats = xlrstats and xlrstats.get_PlayerStats(c)
             if stats:
                 playerstats[c.id]['xkillratio'] = stats.ratio
@@ -874,6 +1134,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                     maxstats[key] = playerstats[c.id][key]
                 if key not in minstats or minstats[key] > playerstats[c.id][key]:
                     minstats[key] = playerstats[c.id][key]
+
         scores = {}
         weights = {
             'killratio': 1.0,
@@ -884,28 +1145,31 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             # weight score for mission objectives higher
             'flagperf': 3.0,
             'bombperf': 3.0,
-            }
+        }
+
         weightsum = sum(weights[key] for key in keys)
         self.debug("score: maxstats=%s" % maxstats)
         self.debug("score: minstats=%s" % minstats)
         for c in clients:
             score = 0.0
-            T = min(1.0, playerstats[c.id]['age'] / 5.0) # reduce score for players who just joined
+            tm = min(1.0, playerstats[c.id]['age'] / 5.0)  # reduce score for players who just joined
             msg = []
             for key in keys:
                 denom = maxstats[key] - minstats[key]
-                if denom < 0.0001: # accurate at ne nimis
+                if denom < 0.0001:  # accurate at ne nimis
                     continue
                 msg.append("%s=%.3f" % (key, playerstats[c.id][key]))
                 keyscore = weights[key] * (playerstats[c.id][key] - minstats[key]) / denom
                 if key in ('killratio', 'teamcontrib', 'hsratio'):
-                    score += T * keyscore
+                    score += tm * keyscore
                 else:
                     score += keyscore
+
             score /= weightsum
             self.debug('score: %s %s score=%.3f age=%.2f %s' % (c.team, c.name, score,
                                                                 playerstats[c.id]['age'], ' '.join(msg)))
             scores[c.id] = score
+
         return scores
 
     def _getRandomTeams(self, clients, checkforced=False):
@@ -922,6 +1186,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                         red.append(c)
                 else:
                     nonforced.append(c)
+
         # distribute nonforced players
         random.shuffle(nonforced)
         n = (len(nonforced) + len(blue) + len(red)) / 2 - len(blue)
@@ -945,54 +1210,49 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         blue = [c for c in clients if c.team == b3.TEAM_BLUE]
         red = [c for c in clients if c.team == b3.TEAM_RED]
         self.debug("advise: numblue=%d numred=%d" % (len(blue), len(red)))
+
         if minplayers and len(blue) + len(red) < minplayers:
             self.debug('advise: too few players')
             return None, None
+
         diff = self._getTeamScoreDiff(blue, red, scores)
+
         if tdm:
             bs, rs = self._getAvgKillsRatios(blue, red)
             avgdiff = bs - rs
-            self.debug('advise: TDM blue=%.2f red=%.2f avgdiff=%.2f skilldiff=%.2f' %\
-                       (bs, rs, avgdiff, diff))
+            self.debug('advise: TDM blue=%.2f red=%.2f avgdiff=%.2f skilldiff=%.2f' % (bs, rs, avgdiff, diff))
         else:
-            # Just looking at kill ratios doesn't work well for CTF, so we base
-            # the balance diff on the skill diff for now. 
-            sinceLast = self.console.time() - self._lastbal
-            damping = min(1.0, sinceLast/(1.0+60.0*self._minbalinterval))
+            # just looking at kill ratios doesn't work well for CTF, so we base
+            # the balance diff on the skill diff for now
+            sincelast = self.console.time() - self._lastbal
+            damping = min(1.0, sincelast / (1.0 + 60.0 * self._minbalinterval))
             avgdiff = 1.21*diff*damping
-            self.debug('advise: CTF/BOMB avgdiff=%.2f skilldiff=%.2f damping=%.2f' %\
-                       (avgdiff, diff, damping))
+            self.debug('advise: CTF/BOMB avgdiff=%.2f skilldiff=%.2f damping=%.2f' % (avgdiff, diff, damping))
+
         return avgdiff, diff
 
-    def cmd_paadvise(self, data, client, cmd=None):
-        """\
-        Report team skill balance, and give advice if teams are unfair
-        """
-        avgdiff, diff = self._getTeamScoreDiffForAdvise()
-        self.console.say('Avg kill ratio diff is %.2f, skill diff is %.2f' %\
-                         (avgdiff, diff))
-        self._advise(avgdiff, 1)
-
-    def _getRecentKills(self, T):
-        t0 = self.console.time() - T
-        i = len(self._killhistory)-1
+    def _getRecentKills(self, tm):
+        t0 = self.console.time() - tm
+        i = len(self._killhistory) - 1
         while i >= 0:
             t, team = self._killhistory[i]
             if t < t0:
                 break
+
             i -= 1
             yield t, team
 
     def _getAvgKillsRatios(self, blue, red):
         if not blue or not red:
             return 0.0, 0.0
-        Tmin = 2.0
-        Tmax = 4.0
+
+        tmin = 2.0
+        tmax = 4.0
         totkpm = len(list((self._getRecentKills(60))))
-        T = max(Tmin, Tmax-0.1*totkpm)
-        self.debug('recent: totkpm=%d T=%.2f' % (totkpm, T))
+        tm = max(tmin, tmax - 0.1 * totkpm)
+        self.debug('recent: totkpm=%d tm=%.2f' % (totkpm, tm))
         recentcontrib = {}
-        t0 = self.console.time() - T * 60
+        t0 = self.console.time() - tm * 60
         for c in blue + red:
             hist = c.var(self, 'teamcontribhist', []).value
             k = 0
@@ -1004,6 +1264,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                     elif s < 0:
                         d += 1
             recentcontrib[c.id] = k/(1.0+d)
+
         self.debug('recent: %s' % recentcontrib)
 
         def contribcmp(a, b):
@@ -1014,9 +1275,10 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         n = min(len(blue), len(red))
         if n > 3:
             n = 3 + int((n-3)/2)
-        bs = float(sum(recentcontrib[c.id] for c in blue[:n]))/n/T
-        rs = float(sum(recentcontrib[c.id] for c in red[:n]))/n/T
-        self.debug('recent: n=%d T=%.2f %.2f %.2f' % (n, T, bs, rs))
+
+        bs = float(sum(recentcontrib[c.id] for c in blue[:n])) / n / tm
+        rs = float(sum(recentcontrib[c.id] for c in red[:n])) / n / tm
+        self.debug('recent: n=%d tm=%.2f %.2f %.2f' % (n, tm, bs, rs))
         return bs, rs
 
     def _forgetTeamContrib(self):
@@ -1025,57 +1287,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         for c in clients:
             c.setvar(self, 'teamcontribhist', [])
             self._saveTeamvars(c)
-
-    def cmd_paunskuffle(self, data, client, cmd=None):
-        """\
-        Create unbalanced teams. Used to test !paskuffle and !pabalance.
-        """
-        self._balancing = True
-        clients = self.console.clients.getList()
-        scores = self._getScores(clients)
-        decorated = [(scores.get(c.id, 0), c) for c in clients
-                     if c.team in (b3.TEAM_BLUE, b3.TEAM_RED)]
-        decorated.sort()
-        players = [c for score, c in decorated]
-        n = len(players) / 2
-        blue = players[:n]
-        red = players[n:]
-        self.console.write('bigtext "Unskuffling! Noobs beware!"')
-        self._move(blue, red)
-        self._forgetTeamContrib()
-        self._balancing = False
-
-    def cmd_paskuffle(self, data=None, client=None, cmd=None):
-        """\
-        Skill shuffle. Shuffle players to balanced teams by numbers and skill.
-        Locked players are also moved.
-        """
-        now = self.console.time()
-        sinceLast = now - self._lastbal
-        if client and client.maxLevel < 20 and self.ignoreCheck() and sinceLast < 60*self._minbalinterval:
-            client.message('Teams changed recently, please wait a while')
-            return None
-        self._balancing = True
-        olddiff, bestdiff, blue, red, scores = self._randTeams(100, 0.1)
-        if client:
-            if (client.team == b3.TEAM_BLUE and\
-                client.cid not in [c.cid for c in blue]) or\
-               (client.team == b3.TEAM_RED and\
-                client.cid not in [c.cid for c in red]):
-                # don't move player who initiated skuffle
-                blue, red = red, blue
-        moves = 0
-        if bestdiff is not None:
-            self.console.write('bigtext "Skill Shuffle in Progress!"')
-            moves = self._move(blue, red, scores)
-        if moves:
-            self.console.say('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (
-                olddiff, bestdiff))
-        else:
-            self.console.say('^1Cannot improve team balance!')
-        self._forgetTeamContrib()
-        self._balancing = False
-        self._lastbal = now
 
     def _countSnipers(self, team):
         n = 0
@@ -1090,6 +1301,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             gear = getattr(c, 'gear', '')
             if 'Z' in gear or 'N' in gear:
                 n += 1
+
         return n
 
     def _move(self, blue, red, scores=None):
@@ -1127,7 +1339,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         if blue and numblue == numred:
             random.shuffle(blue)
             spec = blue.pop()
-            self.console.write('forceteam %s spectate' % spec.cid)
+            self.console.write('forceteam %s spectator' % spec.cid)
             numred -= 1
             moves -= 1
             self.debug('move: moved %s from red to spec' % spec.name)
@@ -1136,6 +1348,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         for _ in xrange(moves):
             newteam = None
+
             if (blue and numblue < numred) or (blue and not red):
                 c = blue.pop()
                 newteam = 'blue'
@@ -1150,6 +1363,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 numblue -= 1
                 numred += 1
                 self.debug('move: moved %s to red' % c.name)
+
             if newteam and scores:
                 if newteam == "red":
                     colorpfx = '^1'
@@ -1162,29 +1376,35 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                         "You were moved because %n team needs more noobs.",
                         "I wanted to move the best player but settled for you instead.",
                         "If you learnt to aim before you shoot I wouldn't have to move you!",
-                        ]
+                    ]
                 else:
                     messages = [
                         "%n team needs your help! Try not to die too many times...",
                         "You have new friends now. Try not to kill them...",
                         "You have no friends now but try to kill %o team anyway...",
                         "You were moved to %n team for balance.",
-                        ]
+                    ]
+
                 msg = random.choice(messages)
                 team = None
+
                 if '%n' in msg:
                     team = newteam
                     msg = msg.replace('%n', '%s')
+
                 if '%o' in msg:
                     team = oldteam
                     msg = msg.replace('%o', '%s')
+
                 if msg.startswith('%'):
                     team = team.capitalize()
+
                 if '%s' in msg:
                     msg = msg % team
+
                 # send priv msg after all joins, seem like we can lose the msg
                 # otherwise...
-                queue.append((c, colorpfx+msg))
+                queue.append((c, colorpfx + msg))
 
         if spec:
             self.console.write('forceteam %s blue' % spec.cid)
@@ -1195,34 +1415,10 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         return moves
 
-    def cmd_pabalance(self, data=None, client=None, cmd=None):
-        """\
-        Move as few players as needed to create teams balanced by numbers AND skill.
-        Locked players are not moved.
-        """
-        now = self.console.time()
-        sinceLast = now - self._lastbal
-        if client and client.maxLevel < 20 and self.ignoreCheck() and sinceLast < 60*self._minbalinterval:
-            client.message('Teams changed recently, please wait a while')
-            return None
-        self._balancing = True
-        # always allow at least 2 moves, but don't move more than 30% of the
-        # players
-        olddiff, bestdiff, bestblue, bestred, scores = self._randTeams(100, 0.1, 0.3)
-        if bestdiff is not None:
-            self.console.write('bigtext "Balancing teams!"')
-            self._move(bestblue, bestred, scores)
-            self.console.say('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (
-                olddiff, bestdiff))
-        else:
-            # we couldn't beat the previous diff by moving only a few players, do a full skuffle
-            self.cmd_paskuffle(data, client, cmd)
-        self._forgetTeamContrib()
-        self._balancing = False
-        self._lastbal = now
-
     def _randTeams(self, times, slack, maxmovesperc=None):
-        # randomize teams a few times and pick the most balanced
+        """\
+        Randomize teams a few times and pick the most balanced
+        """
         clients = self.console.clients.getList()
         scores = self._getScores(clients)
         oldblue = [c for c in clients if c.team == b3.TEAM_BLUE]
@@ -1231,24 +1427,28 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         olddiff = self._getTeamScoreDiff(oldblue, oldred, scores)
         self.debug('rand: n=%s' % n)
         self.debug('rand: olddiff=%.2f' % olddiff)
-        bestdiff = None # best balance diff so far when diff > slack
-        sbestdiff = None # best balance diff so far when diff < slack
-        bestnumdiff = None # best difference in number of snipers so far
-        bestblue = bestred = None # best teams so far when diff > slack
-        sbestblue = sbestred = None # new teams so far when diff < slack
+        bestdiff = None  # best balance diff so far when diff > slack
+        sbestdiff = None  # best balance diff so far when diff < slack
+        bestnumdiff = None  # best difference in number of snipers so far
+        bestblue = bestred = None  # best teams so far when diff > slack
+        sbestblue = sbestred = None  # new teams so far when diff < slack
         epsilon = 0.0001
+
         if not maxmovesperc and abs(len(oldblue) - len(oldred)) > 1:
             # Teams are unbalanced by count, force both teams two have equal number
             # of players
             self.debug('rand: force new teams')
             bestblue, bestred = self._getRandomTeams(clients, checkforced=True)
             bestdiff = self._getTeamScoreDiff(bestblue, bestred, scores)
+
         for _ in xrange(times):
             blue, red = self._getRandomTeams(clients, checkforced=True)
             m = self._countMoves(oldblue, blue) + self._countMoves(oldred, red)
             if maxmovesperc and m > max(2, int(round(maxmovesperc * n))):
                 continue
+
             diff = self._getTeamScoreDiff(blue, red, scores)
+
             if abs(diff) <= slack:
                 # balance below slack threshold, try to distribute the snipers instead
                 numdiff = abs(self._countSnipers(blue) - self._countSnipers(red))
@@ -1258,29 +1458,35 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                         self.debug('rand: first numdiff %d (sdiff=%.2f)' % (numdiff, diff))
                     else:
                         self.debug('rand: found better numdiff %d < %d (sdiff=%.2f)' % (numdiff, bestnumdiff, diff))
+
                     sbestblue, sbestred = blue, red
                     sbestdiff, bestnumdiff = diff, numdiff
+
                 elif numdiff == bestnumdiff and abs(diff) < abs(sbestdiff) - epsilon:
                     # same number of snipers but better balance diff
                     self.debug('rand: found better sdiff %.2f < %.2f (numdiff=%d bestnumdiff=%d)' % (
                         abs(diff), abs(sbestdiff), numdiff, bestnumdiff))
                     sbestblue, sbestred = blue, red
                     sbestdiff = diff
+
             elif bestdiff is None or abs(diff) < abs(bestdiff) - epsilon:
                 # balance above slack threshold
                 if bestdiff is None:
                     self.debug('rand: first diff %.2f' % abs(diff))
                 else:
                     self.debug('rand: found better diff %.2f < %.2f' % (abs(diff), abs(bestdiff)))
+
                 bestblue, bestred = blue, red
                 bestdiff = diff
+
         if bestdiff is not None:
             self.debug('rand: bestdiff=%.2f' % bestdiff)
+
         if sbestdiff is not None:
             self.debug('rand: sbestdiff=%.2f bestnumdiff=%d' % (sbestdiff, bestnumdiff))
-            self.debug('rand: snipers: blue=%d red=%d' %\
-                       (self._countSnipers(sbestblue), self._countSnipers(sbestred)))
+            self.debug('rand: snipers: blue=%d red=%d' % (self._countSnipers(sbestblue), self._countSnipers(sbestred)))
             return olddiff, sbestdiff, sbestblue, sbestred, scores
+
         return olddiff, bestdiff, bestblue, bestred, scores
 
     def _countMoves(self, old, new):
@@ -1289,6 +1495,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         for c in old:
             if c.name not in newnames:
                 i += 1
+
         return i
 
     def skillcheck(self):
@@ -1297,12 +1504,11 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         gametype = self._getGameType()
 
-        # run skillbalancer only if current gametype is in autobalance_gametypes list
-        try:
-            self._autobalance_gametypes_array.index(gametype)
-        except:
+        # run skillbalancer only if current
+        # gametype is in autobalance_gametypes list
+        if not gametype in self._autobalance_gametypes_array:
             self.debug('Current gametype (%s) is not specified in autobalance_gametypes - skillbalancer disabled',
-                self.console.game.gameType)
+                       self.console.game.gameType)
             return None
 
         if self._skill_balance_mode == 0:
@@ -1343,70 +1549,178 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         # mode 0: no advice
         # mode 1: give advice
         # mode 2: give advice if teams are unfair
-        absdiff = 5*abs(avgdiff)
-        unfair = absdiff > 2.31 # constant carefully reviewed by an eminent team of trained Swedish scientistians :)
+        absdiff = 5 * abs(avgdiff)
+        unfair = absdiff > 2.31  # constant carefully reviewed by an eminent team of trained Swedish scientistians :)
         word = None
         same = 'remains '
         stronger = 'has become '
         if 1 <= absdiff < 2:
             word = 'stronger'
-        if 2 <= absdiff < 4:
+        elif 2 <= absdiff < 4:
             word = 'dominating'
-        if 4 <= absdiff < 6:
+        elif 4 <= absdiff < 6:
             word = 'overpowering'
-        if 6 <= absdiff < 8:
+        elif 6 <= absdiff < 8:
             word = 'supreme'
-        if 8 <= absdiff < 10:
+        elif 8 <= absdiff < 10:
             word = 'Godlike!'
-        if 10 <= absdiff:
+        elif 10 <= absdiff:
             word = 'probably cheating :P'
             same = 'is '
             stronger = 'is '
+
         if word:
             oldteam, oldword, oldabsdiff = self._oldadv
-            self.debug('advise: oldteam=%s oldword=%s oldabsdiff=%s' %\
-                       (oldteam, oldword, oldabsdiff))
+            self.debug('advise: oldteam=%s oldword=%s oldabsdiff=%s' % (oldteam, oldword, oldabsdiff))
             team = avgdiff < 0 and 'Red' or 'Blue'
             if team == oldteam:
                 if word == oldword:
                     msg = '%s team %s%s' % (team, same, word)
                 elif absdiff > oldabsdiff:
-                    # Stronger team is becoming even stronger
+                    # stronger team is becoming even stronger
                     msg = '%s team %s%s' % (team, stronger, word)
                 elif absdiff < oldabsdiff:
-                    # Stronger team is becoming weaker
+                    # stronger team is becoming weaker
                     msg = '%s team is just %s' % (team, word)
                     if absdiff < 4:
-                        # Difference not too big, teams may soon be fair
+                        # difference not too big, teams may soon be fair
                         unfair = False
             else:
                 msg = '%s team is now %s' % (team, word)
+
             if unfair and (mode == 1 or mode == 2):
                 msg += ', use !bal to balance the teams'
+
             if not unfair and mode == 1:
                 msg += ', but no action necessary yet'
-            self.debug('advise: team=%s word=%s absdiff=%s' %\
-                       (team, word, absdiff))
+
+            self.debug('advise: team=%s word=%s absdiff=%s' % (team, word, absdiff))
             self._oldadv = (team, word, absdiff)
+
         else:
             msg = 'Teams seem fair'
             self._oldadv = (None, None, None)
+
         self.console.say(msg)
 
+#--Commands implementation ------------------------------------------------------------------------
+# /rcon commands:
+#   slap <clientnum>
+#   nuke <clientnum>
+#   forceteam <clientnum> <red/blue/s>
+#   veto (vote cancellen)
+#   mute <clientnum> <seconds>
+#   pause
+#   swapteams
+#   shuffleteams
+
+    def cmd_paadvise(self, data, client, cmd=None):
+        """\
+        Report team skill balance, and give advice if teams are unfair
+        """
+        avgdiff, diff = self._getTeamScoreDiffForAdvise()
+        self.console.say('Avg kill ratio diff is %.2f, skill diff is %.2f' % (avgdiff, diff))
+        self._advise(avgdiff, 1)
+
+    def cmd_paunskuffle(self, data, client, cmd=None):
+        """\
+        Create unbalanced teams. Used to test !paskuffle and !pabalance.
+        """
+        self._balancing = True
+        clients = self.console.clients.getList()
+        scores = self._getScores(clients)
+        decorated = [(scores.get(c.id, 0), c) for c in clients
+                     if c.team in (b3.TEAM_BLUE, b3.TEAM_RED)]
+
+        decorated.sort()
+        players = [c for score, c in decorated]
+        n = len(players) / 2
+        blue = players[:n]
+        red = players[n:]
+        self.console.write('bigtext "Unskuffling! Noobs beware!"')
+        self._move(blue, red)
+        self._forgetTeamContrib()
+        self._balancing = False
+
+    def cmd_paskuffle(self, data=None, client=None, cmd=None):
+        """\
+        Skill shuffle. Shuffle players to balanced teams by numbers and skill.
+        Locked players are also moved.
+        """
+        now = self.console.time()
+        sincelast = now - self._lastbal
+        if client and client.maxLevel < 20 and self.ignoreCheck() and sincelast < 60 * self._minbalinterval:
+            client.message('Teams changed recently, please wait a while')
+            return
+
+        self._balancing = True
+        olddiff, bestdiff, blue, red, scores = self._randTeams(100, 0.1)
+        if client:
+            if (client.team == b3.TEAM_BLUE and client.cid not in [c.cid for c in blue]) or \
+               (client.team == b3.TEAM_RED and client.cid not in [c.cid for c in red]):
+                # don't move player who initiated skuffle
+                blue, red = red, blue
+
+        moves = 0
+        if bestdiff is not None:
+            self.console.write('bigtext "Skill Shuffle in Progress!"')
+            moves = self._move(blue, red, scores)
+
+        if moves:
+            self.console.say('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (olddiff, bestdiff))
+        else:
+            self.console.say('^1Cannot improve team balance!')
+
+        self._forgetTeamContrib()
+        self._balancing = False
+        self._lastbal = now
+
+    def cmd_pabalance(self, data=None, client=None, cmd=None):
+        """\
+        Move as few players as needed to create teams balanced by numbers AND skill.
+        Locked players are not moved.
+        """
+        now = self.console.time()
+        sincelast = now - self._lastbal
+        if client and client.maxLevel < 20 and self.ignoreCheck() and sincelast < 60 * self._minbalinterval:
+            client.message('Teams changed recently, please wait a while')
+            return
+
+        self._balancing = True
+        # always allow at least 2 moves, but don't move more than 30% of the players
+        olddiff, bestdiff, bestblue, bestred, scores = self._randTeams(100, 0.1, 0.3)
+        if bestdiff is not None:
+            self.console.write('bigtext "Balancing teams!"')
+            self._move(bestblue, bestred, scores)
+            self.console.say('^4Team skill difference was ^1%.2f^4, is now ^1%.2f' % (olddiff, bestdiff))
+        else:
+            # we couldn't beat the previous diff by moving only a few players, do a full skuffle
+            self.cmd_paskuffle(data, client, cmd)
+
+        self._forgetTeamContrib()
+        self._balancing = False
+        self._lastbal = now
+
     def cmd_paautoskuffle(self, data, client, cmd=None):
+        """\
+        [<mode>] - Set the skill balancer mode.
+        """
         modes = ["0-none", "1-advise", "2-autobalance", "3-autoskuffle"]
         if not data:
             mode = modes[self._skill_balance_mode]
             self.console.say("Skill balancer mode is '%s'" % mode)
             self.console.say("Options are %s" % ', '.join(modes))
             return
+
         mode = None
+
         try:
             mode = int(data)
         except ValueError:
             for i, m in enumerate(modes):
                 if data in m:
                     mode = i
+
         if mode is not None and 0 <= mode <= 3:
             self._skill_balance_mode = mode
             self.console.say("Skill balancer mode is now '%s'" % modes[mode])
@@ -1419,57 +1733,53 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         <player1> [player2] - Swap two teams for 2 clients. If player2 is not specified, the admin
         using the command is swapped with player1. Doesn't work with spectators (exception for calling admin).
         """
-        #Check the input
-        input = self._adminPlugin.parseUserCmd(data)
-        #Check for input. If none, exist with a message.
-        if input:
-            #Check if the first player exists. If none, exit.
-            client1 = self._adminPlugin.findClientPrompt(input[0], client)
+        # check the input
+        args = self._adminPlugin.parseUserCmd(data)
+        # check for input. If none, exist with a message.
+        if args:
+            # check if the first player exists. If none, exit.
+            client1 = self._adminPlugin.findClientPrompt(args[0], client)
             if not client1:
-                return False
+                return
         else:
-            client.message("Invalid parameters, try !swap client1 [client2]")
-            return False
-            #Check if there's a second, valid input. If no input, mark the admin to be changed.
-        #If the specified player doesn't exist, exit.
-        if input[1] is not None:
-            client2 = self._adminPlugin.findClientPrompt(input[1], client)
+            client.message("Invalid parameters, try !help paswap")
+            return
+
+        # if the specified player doesn't exist, exit.
+        if args[1] is not None:
+            client2 = self._adminPlugin.findClientPrompt(args[1], client)
             if not client2:
-                return False
+                return
         else:
             client2 = client
+
         if client1.team == b3.TEAM_SPEC:
-            client.message("%s is a spectator! - Can't be swapped" % (client1.name))
-            return False
+            client.message("%s is a spectator! - Can't be swapped" % client1.name)
+            return
+
         if client2.team == b3.TEAM_SPEC:
-            client.message("%s is a spectator! - Can't be swapped" % (client2.name))
-            return False
+            client.message("%s is a spectator! - Can't be swapped" % client2.name)
+            return
+
         if client1.team == client2.team:
-            client.message("%s and %s are on the same team! - Swapped them anyway :p" % ((client1.name), client2.name))
-            return False
+            client.message("%s and %s are on the same team! - Swapped them anyway :p" % (client1.name, client2.name))
+            return
+
         if client1.team == b3.TEAM_RED:
             self._move([client1], [client2])
         else:
             self._move([client2], [client1])
-            # No need to send the message twice to the switching admin :-)
-        if (client1 != client):
-            client1.message("^4You were swapped with %s by the admin." % (client2.name))
-        if (client2 != client):
-            client2.message("^4You were swapped with %s by the admin." % (client1.name))
-        client.message("^3Successfully swapped %s and %s." % (client1.name, client2.name))
-        return True
 
+        # No need to send the message twice to the switching admin :-)
 
-#--Commands implementation ------------------------------------------------------------------------
-# /rcon commands:
-# slap <clientnum>
-# nuke <clientnum>
-# forceteam <clientnum> <red/blue/s>
-# veto (vote cancellen)
-# mute <clientnum> <seconds>
-# pause
-# swapteams
-# shuffleteams
+        if client1 != client:
+            client1.message("^4You were swapped with %s by the admin" % client2.name)
+
+        if client2 != client:
+            client2.message("^4You were swapped with %s by the admin" % client1.name)
+
+        client.message("^3Successfully swapped %s and %s" % (client1.name, client2.name))
+
 
     def cmd_pateams(self, data, client, cmd=None):
         """\
@@ -1477,14 +1787,14 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         The player with the least time in a team will be switched.
         """
         if self.teambalance():
+
             if self._teamsbalanced:
-                client.message('^7Teams are already balanced.')
+                client.message('^7Teams are already balanced')
             else:
-                client.message('^7Teams are now balanced.')
+                client.message('^7Teams are now balanced')
                 self._teamsbalanced = True
         else:
-            client.message('^7Teambalancing failed, please try a again in a few moments.')
-        return None
+            client.message('^7Teambalancing failed, please try a again in a few moments')
 
     def cmd_pavote(self, data, client=None, cmd=None):
         """\
@@ -1492,23 +1802,29 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         Setting vote on will set the vote back to the value when it was set off.
         """
         if not data:
+
             if client:
                 client.message('^7Invalid or missing data, try !help pavote')
             else:
                 self.debug('No data sent to cmd_pavote')
-            return False
+
+            return
+
         else:
+
             if data in ('on', 'off', 'reset'):
                 if client:
-                    client.message('^7Voting: ^1%s' % (data))
+                    client.message('^7Voting: ^1%s' % data)
                 else:
-                    self.debug('Voting: %s' % (data))
+                    self.debug('Voting: %s' % data)
             else:
+
                 if client:
                     client.message('^7Invalid data, try !help pavote')
                 else:
                     self.debug('Invalid data sent to cmd_pavote')
-                return False
+
+                return
 
         if data == 'off':
             curvalue = self.console.getCvar('g_allowvote').getInt()
@@ -1519,35 +1835,28 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             self.console.setCvar('g_allowvote', '%s' % self._lastvote)
         elif data == 'reset':
             self.console.setCvar('g_allowvote', '%s' % self._origvote)
-        else:
-            return False
-
-        return True
 
     def cmd_paversion(self, data, client, cmd=None):
         """\
-        This command identifies PowerAdminUrt version and creator.
+        This command identifies PowerAdminUrt version and creator
         """
         cmd.sayLoudOrPM(client, 'I am PowerAdminUrt version %s by %s' % (__version__, __author__))
-        return None
 
     def cmd_paexec(self, data, client, cmd=None):
         """\
         <configfile.cfg> - Execute a server configfile.
-        (You must use the command exactly as it is! )
+        (You must use the command exactly as it is!)
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help paexec')
-            return False
-        else:
-            if re.match('^[a-z0-9_.]+.cfg$', data, re.I):
-                self.debug('Executing configfile = [%s]', data)
-                result = self.console.write('exec %s' % data)
-                cmd.sayLoudOrPM(client, result)
-            else:
-                self.error('%s is not a valid configfile', data)
+            client.message('^7Missing data, try !help paexec')
+            return
 
-        return True
+        if re.match('^[a-z0-9_.]+.cfg$', data, re.I):
+            self.debug('executing configfile: %s' % data)
+            result = self.console.write('exec %s' % data)
+            cmd.sayLoudOrPM(client, result)
+        else:
+            self.error('%s is not a valid configfile' % data)
 
     def cmd_pacyclemap(self, data, client, cmd=None):
         """\
@@ -1556,7 +1865,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         time.sleep(1)
         self.console.write('cyclemap')
-        return True
 
     def cmd_pamaprestart(self, data, client, cmd=None):
         """\
@@ -1564,7 +1872,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         (You can safely use the command without the 'pa' at the beginning)
         """
         self.console.write('map_restart')
-        return True
 
     def cmd_pamapreload(self, data, client, cmd=None):
         """\
@@ -1572,24 +1879,21 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         (You can safely use the command without the 'pa' at the beginning)
         """
         self.console.write('reload')
-        return True
 
     def cmd_paset(self, data, client, cmd=None):
         """\
         <cvar> <value> - Set a server cvar to a certain value.
-        (You must use the command exactly as it is! )
+        (You must use the command exactly as it is!)
         """
         if not data:
             client.message('^7Invalid or missing data, try !help paset')
-            return False
-        else:
-            # are we still here? Let's write it to console
-            input = data.split(' ', 1)
-            cvarName = input[0]
-            value = input[1]
-            self.console.setCvar(cvarName, value)
+            return
 
-        return True
+        # are we still here? Let's write it to console
+        args = data.split(' ', 1)
+        cvar = args[0]
+        value = args[1]
+        self.console.setCvar(cvar, value)
 
     def cmd_paget(self, data, client, cmd=None):
         """\
@@ -1598,14 +1902,12 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         if not data:
             client.message('^7Invalid or missing data, try !help paget')
-            return False
-        else:
-            # are we still here? Let's write it to console
-            getcvar = data.split(' ')
-            getcvarvalue = self.console.getCvar('%s' % getcvar[0])
-            cmd.sayLoudOrPM(client, '%s' % getcvarvalue)
+            return
 
-        return True
+        # are we still here? Let's write it to console
+        getcvar = data.split(' ')
+        getcvarvalue = self.console.getCvar('%s' % getcvar[0])
+        cmd.sayLoudOrPM(client, '%s' % getcvarvalue)
 
     def cmd_pabigtext(self, data, client, cmd=None):
         """\
@@ -1614,12 +1916,10 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         if not data:
             client.message('^7Invalid or missing data, try !help pabigtext')
-            return False
-        else:
-            # are we still here? Let's write it to console
-            self.console.write('bigtext "%s"' % data)
+            return
 
-        return True
+        # are we still here? Let's write it to console
+        self.console.write('bigtext "%s"' % data)
 
     def cmd_pamute(self, data, client, cmd=None):
         """\
@@ -1627,30 +1927,29 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         (You can safely use the command without the 'pa' at the beginning)
         """
         # this will split the player name and the message
-        input = self._adminPlugin.parseUserCmd(data)
-        if input:
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
+        args = self._adminPlugin.parseUserCmd(data)
+        if args:
+            # args[0] is the player id
+            sclient = self._adminPlugin.findClientPrompt(args[0], client)
             if not sclient:
                 # a player matchin the name was not found, a list of closest matches will be displayed
                 # we can exit here and the user will retry with a more specific player
-                return False
+                return
         else:
             client.message('^7Invalid data, try !help pamute')
-            return False
+            return
 
         if sclient.maxLevel > client.maxLevel:
             client.message("^7You don't have enough privileges to mute this player")
-            return False
-        if input[1] is not None and re.match('^([0-9]+)\s*$', input[1]):
-            duration = int(input[1])
+            return
+
+        if args[1] is not None and re.match('^([0-9]+)\s*$', args[1]):
+            duration = int(args[1])
         else:
             duration = ''
 
         # are we still here? Let's write it to console
         self.console.write('mute %s %s' % (sclient.cid, duration))
-
-        return True
 
     def cmd_papause(self, data, client, cmd=None):
         """\
@@ -1659,45 +1958,43 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         result = self.console.write('pause')
         cmd.sayLoudOrPM(client, result)
 
-        return True
-
     def cmd_paslap(self, data, client, cmd=None):
         """\
         <player> [<ammount>] - (multi)Slap a player.
         (You can safely use the command without the 'pa' at the beginning)
         """
         # this will split the player name and the message
-        input = self._adminPlugin.parseUserCmd(data)
-        if input:
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
+        args = self._adminPlugin.parseUserCmd(data)
+        if args:
+            # args[0] is the player id
+            sclient = self._adminPlugin.findClientPrompt(args[0], client)
             if not sclient:
                 # a player matchin the name was not found, a list of closest matches will be displayed
                 # we can exit here and the user will retry with a more specific player
-                return False
+                return
         else:
             client.message('^7Invalid data, try !help paslap')
-            return False
+            return
 
         if sclient.maxLevel >= self._slapSafeLevel and client.maxLevel < 90:
             client.message("^7You don't have enough privileges to slap an Admin")
-            return False
+            return
 
-        if input[1]:
+        if args[1]:
+
             try:
-                x = int(input[1])
-            except:
+                x = int(args[1])
+            except ValueError:
                 client.message('^7Invalid data, try !help paslap')
-                return False
+                return
+
             if x in range(1, 26):
                 thread.start_new_thread(self.multipunish, (x, sclient, client, 'slap'))
             else:
                 client.message('^7Number of punishments out of range, must be 1 to 25')
         else:
             self.debug('Performing single slap...')
-            self.console.write('slap %s' % (sclient.cid))
-
-        return True
+            self.console.write('slap %s' % sclient.cid)
 
     def cmd_panuke(self, data, client, cmd=None):
         """\
@@ -1705,33 +2002,33 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         (You can safely use the command without the 'pa' at the beginning)
         """
         # this will split the player name and the message
-        input = self._adminPlugin.parseUserCmd(data)
-        if input:
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
+        args = self._adminPlugin.parseUserCmd(data)
+        if args:
+            # args[0] is the player id
+            sclient = self._adminPlugin.findClientPrompt(args[0], client)
             if not sclient:
                 # a player matchin the name was not found, a list of closest matches will be displayed
                 # we can exit here and the user will retry with a more specific player
-                return False
+                return
         else:
             client.message('^7Invalid data, try !help panuke')
-            return False
+            return
 
-        if input[1]:
+        if args[1]:
+
             try:
-                x = int(input[1])
-            except:
+                x = int(args[1])
+            except ValueError:
                 client.message('^7Invalid data, try !help panuke')
-                return False
+                return
+
             if x in range(1, 26):
                 thread.start_new_thread(self.multipunish, (x, sclient, client, 'nuke'))
             else:
                 client.message('^7Number of punishments out of range, must be 1 to 25')
         else:
             self.debug('Performing single nuke...')
-            self.console.write('nuke %s' % (sclient.cid))
-
-        return True
+            self.console.write('nuke %s' % sclient.cid)
 
     def multipunish(self, x, sclient, client, cmd):
         self.debug('Entering multipunish...')
@@ -1749,46 +2046,42 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         self.console.write('veto')
 
-        return True
-
     def cmd_paforce(self, data, client, cmd=None):
         """\
         <player> <red/blue/spec/free> <lock> - Force a client to red/blue/spec or release the force (free)
         adding 'lock' will lock the player where it is forced to, default this is off.
-        using 'all free' wil release all locks.
+        using 'all free' will release all locks.
         (You can safely use the command without the 'pa' at the beginning)
         """
         # this will split the player name and the message
-        input = self._adminPlugin.parseUserCmd(data)
-        if input:
+        args = self._adminPlugin.parseUserCmd(data)
+        if args:
             # check if all Locks should be released
-            if input[0] == "all" and input[1] == "free":
+            if args[0] == "all" and args[1] == "free":
                 self.resetTeamLocks()
                 self.console.say('All TeamLocks were released')
-                return None
+                return
 
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
+            # args[0] is the player id
+            sclient = self._adminPlugin.findClientPrompt(args[0], client)
             if not sclient:
                 # a player matchin the name was not found, a list of closest matches will be displayed
                 # we can exit here and the user will retry with a more specific player
-                return False
+                return
         else:
             client.message('^7Invalid data, try !help paforce')
-            return False
+            return
 
-        if not len(input[1]):
+        if not len(args[1]):
             client.message('^7Missing data, try !help paforce')
-            return False
+            return
 
-        tdata = input[1].split(' ')
+        tdata = args[1].split(' ')
         team = tdata[0]
 
-        try:
-            if tdata[1] == 'lock':
-                lock = True
-        except:
-            lock = False
+        lock = False
+        if len(tdata) > 1 and tdata[1] == 'lock':
+            lock = True
 
         if team == 'spec' or team == 'spectator':
             team = 's'
@@ -1804,40 +2097,40 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         if team == 'free':
             if sclient.isvar(self, 'paforced'):
-                sclient.message('^3Your are released by the admin')
-                client.message('^7%s ^3was released.' % (sclient.name))
+                sclient.message('^3Your have been released by the admin')
+                client.message('^7%s ^3has been released' % sclient.name)
                 sclient.delvar(self, 'paforced')
-                return False
+                return
             else:
-                client.message('^3There was no lock on ^7%s' % (sclient.name))
+                client.message('^3There was no lock on ^7%s' % sclient.name)
+
         elif team in ('red', 'blue', 's') and lock:
-            sclient.message('^3Your are forced and locked to: ^7%s' % (teamname))
+            sclient.message('^3Your are forced and locked to: ^7%s' % teamname)
+
         elif team in ('red', 'blue', 's'):
-            sclient.message('^3Your are forced to: ^7%s' % (teamname))
+            sclient.message('^3Your are forced to: ^7%s' % teamname)
+
         else:
-            client.message('^7Invalid or missing data, try !help paforce')
-            return False
+            client.message('^7Invalid data, try !help paforce')
+            return
 
         if lock:
-            sclient.setvar(self, 'paforced', team) # s, red or blue
+            sclient.setvar(self, 'paforced', team)  # s, red or blue
         else:
             sclient.delvar(self, 'paforced')
 
         # are we still here? Let's write it to console
         self.console.write('forceteam %s %s' % (sclient.cid, team))
         client.message('^3%s ^7forced to ^3%s' % (sclient.name, teamname))
-        return True
 
     def cmd_paswapteams(self, data, client, cmd=None):
         """\
-        Swap teams.
+        Swap current teams.
         (You can safely use the command without the 'pa' at the beginning)
         """
-        # Ignore automatic checking before giving the command
+        # ignore automatic checking before giving the command
         self.ignoreSet(30)
         self.console.write('swapteams')
-
-        return True
 
     def cmd_pashuffleteams(self, data, client, cmd=None):
         """\
@@ -1848,8 +2141,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         self.ignoreSet(30)
         self.console.write('shuffleteams')
 
-        return True
-
     def cmd_pamoon(self, data, client, cmd=None):
         """\
         Set moon mode <on/off>
@@ -1857,52 +2148,51 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help pamoon')
-            return False
-        else:
-            if data == 'on':
-                self.console.setCvar('g_gravity', self._moon_on_gravity)
-                self.console.say('^7Moon mode: ^2ON')
-            elif data == 'off':
-                self.console.setCvar('g_gravity', self._moon_off_gravity)
-                self.console.say('^7Moon mode: ^9OFF')
-        return True
+            return
+
+        if data == 'on':
+            self.console.setCvar('g_gravity', self._moon_on_gravity)
+            self.console.say('^7Moon mode: ^2ON')
+        elif data == 'off':
+            self.console.setCvar('g_gravity', self._moon_off_gravity)
+            self.console.say('^7Moon mode: ^1OFF')
 
     def cmd_papublic(self, data, client, cmd=None):
         """\
-        Set server public mode on/off
+        Set server public mode on/off.
         (You can safely use the command without the 'pa' at the beginning)
         """
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help papublic')
-            return False
-        else:
-            if data == 'on':
-                self.console.setCvar('g_password', '')
-                self.console.say('^7public mode: ^2ON')
-                self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_PUBLIC, '', client))
-            elif data == 'off':
-                newpassword = self._papublic_password
-                if self.pass_lines is not None:
-                    i = random.randint(0, len(self.pass_lines) - 1)
-                    newpassword = self.pass_lines[i]
+            return
 
-                for i in range(0, self.randnum):
-                    newpassword += str(random.randint(1, 9))
+        if data == 'on':
+            self.console.setCvar('g_password', '')
+            self.console.say('^7public mode: ^2ON')
+            self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_PUBLIC, '', client))
 
-                self.debug('Private password set to: %s' % newpassword)
+        elif data == 'off':
+            newpassword = self._papublic_password
+            if self._pass_lines is not None:
+                i = random.randint(0, len(self._pass_lines) - 1)
+                newpassword = self._pass_lines[i]
 
-                if newpassword is None:
-                    client.message(
-                        '^4ERROR :^7 can\'t set public mode off because there is no password specified in the config file')
-                    return False
-                else:
-                    self.console.setCvar('g_password', '%s' % (newpassword))
-                    self.console.say('^7public mode: ^9OFF')
-                    client.message('^7password is \'^4%s^7\'' % (newpassword))
-                    client.message('^7type ^5!mapreload^7 to apply change')
-                    self.console.write('bigtext "^7Server going ^3PRIVATE^7 soon !!"')
-                    self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_PUBLIC, newpassword, client))
-        return True
+            for i in range(0, self._randnum):
+                newpassword += str(random.randint(1, 9))
+
+            self.debug('private password set to: %s' % newpassword)
+
+            if newpassword is None:
+                client.message('^1ERROR: ^7could not set public mode off because \
+                                there is no password specified in the config file')
+                return
+
+            self.console.setCvar('g_password', '%s' % newpassword)
+            self.console.say('^7public mode: ^1OFF')
+            client.message('^7password is \'^4%s^7\'' % newpassword)
+            client.message('^7type ^5!mapreload^7 to apply change')
+            self.console.write('bigtext "^7Server going ^3PRIVATE ^7soon!!"')
+            self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_PUBLIC, newpassword, client))
 
     def cmd_pamatch(self, data, client, cmd=None):
         """\
@@ -1911,44 +2201,44 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         """
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help pamatch')
-            return False
-        else:
-            if data == 'on':
-                self._matchmode = True
-                self.console.setCvar('g_matchmode', '1')
-                self.console.say('^7match mode: ^2ON')
-                self.console.write('bigtext "^7MATCH starting soon !!"')
-                for e in self.match_plugin_disable:
-                    self.debug('Disabling plugin %s' % e)
-                    plugin = self.console.getPlugin(e)
-                    if plugin:
-                        plugin.disable()
-                        client.message('^7plugin %s disabled' % e)
-                client.message('^7type ^5!mapreload^7 to apply change')
-                self.console.write('bigtext "^7MATCH starting soon !!"')
+            return
 
-            elif data == 'off':
-                self._matchmode = False
-                self.console.setCvar('g_matchmode', '0')
-                self.console.say('^7match mode: ^9OFF')
+        if data == 'on':
+            self._matchmode = True
+            self.console.setCvar('g_matchmode', '1')
+            self.console.say('^7Match mode: ^2ON')
+            self.console.write('bigtext "^7MATCH starting soon !!"')
+            for e in self._match_plugin_disable:
+                self.debug('disabling plugin %s' % e)
+                plugin = self.console.getPlugin(e)
+                if plugin:
+                    plugin.disable()
+                    client.message('^7plugin %s disabled' % e)
+            client.message('^7type ^5!mapreload^7 to apply change')
+            self.console.write('bigtext "^7MATCH starting soon !!"')
 
-                for e in self.match_plugin_disable:
-                    self.debug('enabling plugin %s' % e)
-                    plugin = self.console.getPlugin(e)
-                    if plugin:
-                        plugin.enable()
-                        client.message('^7plugin %s enabled' % e)
-                client.message('^7type ^5!mapreload^7 to apply change')
+        elif data == 'off':
+            self._matchmode = False
+            self.console.setCvar('g_matchmode', '0')
+            self.console.say('^7Match mode: ^1OFF')
+
+            for e in self._match_plugin_disable:
+                self.debug('enabling plugin %s' % e)
+                plugin = self.console.getPlugin(e)
+                if plugin:
+                    plugin.enable()
+                    client.message('^7plugin %s enabled' % e)
+            client.message('^7type ^5!mapreload^7 to apply change')
+
         self.set_configmode(None)
-        return True
-
 
     def cmd_pagear(self, data, client=None, cmd=None):
         """\
-        <all/none/reset/[+-](nade|snipe|spas|pistol|auto|negev)> - Set allowed weapons.
+        [<all/none/reset/[+-](nade|snipe|spas|pistol|auto|negev)>] - Set allowed weapons.
         """
         cur_gear = self.console.getCvar('g_gear').getInt()
         if not data:
+
             if client:
                 nade = (cur_gear & 1) != 1
                 snipe = (cur_gear & 2) != 2
@@ -1959,16 +2249,19 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
                 self.console.write('^7current gear: %s (Nade:%d, Sniper:%d, Spas:%d, Pistol:%d, Auto:%d, Negev:%d)' %
                                    (cur_gear, nade, snipe, spas, pist, auto, nege))
-            return False
+            return
+
         else:
+
             if not data[:5] in ('all', 'none', 'reset',
                                 '+nade', '+snip', '+spas', '+pist', '+auto', '+nege',
                                 '-nade', '-snip', '-spas', '-pist', '-auto', '-nege'):
                 if client:
                     client.message('^7Invalid data, try !help pagear')
                 else:
-                    self.debug('Invalid data sent to cmd_pagear')
-                return False
+                    self.debug('invalid data sent to cmd_pagear')
+
+                return
 
         if data[:5] == 'all':
             self.console.setCvar('g_gear', '0')
@@ -1977,6 +2270,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         elif data[:5] == 'reset':
             self.console.setCvar('g_gear', '%s' % self._origgear)
         else:
+
             if data[1:5] == 'nade':
                 bit = 1
             elif data[1:5] == 'snip':
@@ -1990,142 +2284,135 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             elif data[1:5] == 'nege':
                 bit = 32
             else:
-                return False
+                return
 
             if data[:1] == '+':
                 self.console.setCvar('g_gear', '%s' % (cur_gear & (63 - bit)))
             elif data[:1] == '-':
                 self.console.setCvar('g_gear', '%s' % (cur_gear | bit))
-            else:
-                return False
-
-        return True
 
     def cmd_paffa(self, data, client, cmd=None):
         """\
         Change game type to Free For All
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 0')
+        self.console.setCvar('g_gametype', '0')
         if client:
             client.message('^7game type changed to ^4Free For All')
+
         self.set_configmode('ffa')
-        return True
 
     def cmd_patdm(self, data, client, cmd=None):
         """\
         Change game type to Team Death Match
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 3')
+        self.console.setCvar('g_gametype', '3')
         if client:
             client.message('^7game type changed to ^4Team Death Match')
+
         self.set_configmode('tdm')
-        return True
 
     def cmd_pats(self, data, client, cmd=None):
         """\
         Change game type to Team Survivor
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 4')
+        self.console.setCvar('g_gametype', '4')
         if client:
             client.message('^7game type changed to ^4Team Survivor')
+
         self.set_configmode('ts')
-        return True
 
     def cmd_paftl(self, data, client, cmd=None):
         """\
         Change game type to Follow The Leader
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 5')
+        self.console.setCvar('g_gametype', '5')
         if client:
             client.message('^7game type changed to ^4Follow The Leader')
+
         self.set_configmode('ftl')
-        return True
 
     def cmd_pacah(self, data, client, cmd=None):
         """\
         Change game type to Capture And Hold
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 6')
+        self.console.setCvar('g_gametype', '6')
         if client:
             client.message('^7game type changed to ^4Capture And Hold')
+
         self.set_configmode('cah')
-        return True
 
     def cmd_pactf(self, data, client, cmd=None):
         """\
         Change game type to Capture The Flag
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 7')
+        self.console.setCvar('g_gametype', '7')
         if client:
             client.message('^7game type changed to ^4Capture The Flag')
+
         self.set_configmode('ctf')
-        return True
 
     def cmd_pabomb(self, data, client, cmd=None):
         """\
         Change game type to Bomb
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 8')
+        self.console.setCvar('g_gametype', '8')
         if client:
             client.message('^7game type changed to ^4Bomb')
-        self.set_configmode('bomb')
-        return True
 
+        self.set_configmode('bomb')
 
     def cmd_paident(self, data, client=None, cmd=None):
         """\
         <name> - show the ip and guid of a player
         (You can safely use the command without the 'pa' at the beginning)
         """
-        input = self._adminPlugin.parseUserCmd(data)
-        if not input:
-            cmd.sayLoudOrPM(client, 'Your id is ^2@%s' % (client.id))
-            return True
-        else:
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
-            if not sclient:
-                # a player matching the name was not found, a list of closest matches will be displayed
-                # we can exit here and the user will retry with a more specific player
-                return False
+        args = self._adminPlugin.parseUserCmd(data)
+        if not args:
+            cmd.sayLoudOrPM(client, 'Your id is ^2@%s' % client.id)
+            return
+
+        # args[0] is the player id
+        sclient = self._adminPlugin.findClientPrompt(args[0], client)
+        if not sclient:
+            # a player matching the name was not found, a list of closest matches will be displayed
+            # we can exit here and the user will retry with a more specific player
+            return
 
         if client.maxLevel < self._full_ident_level:
-            cmd.sayLoudOrPM(client,
-                '%s ^4@%s ^2%s' % (self.console.formatTime(self.console.time()), sclient.id, sclient.exactName))
+            cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s' % (self.console.formatTime(self.console.time()),
+                                                       sclient.id, sclient.exactName))
         else:
-            cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s ^2%s ^2%s' % (
-                self.console.formatTime(self.console.time()), sclient.id, sclient.exactName, sclient.ip,
-                self.console.formatTime(sclient.timeAdd)))
-        return True
+            cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s ^2%s ^2%s' % (self.console.formatTime(self.console.time()),
+                                                                 sclient.id, sclient.exactName, sclient.ip,
+                                                                 self.console.formatTime(sclient.timeAdd)))
 
 #---Teambalance Mechanism--------------------------------------------------------------------------
-    """\
-    /g_redteamlist en /g_blueteamlist
-       they return which clients are in the red or blue team
-       not with numbers but characters (clientnum 0 = A, clientnum 1 = B, etc.)
-    """
+#
+# /g_redteamlist en /g_blueteamlist
+#   they return which clients are in the red or blue team
+#   not with numbers but characters (clientnum 0 = A, clientnum 1 = B, etc.
 
     def onTeamChange(self, team, client):
         #store the time of teamjoin for autobalancing purposes
         client.setvar(self, 'teamtime', self.console.time())
-        self.verbose('Client variable teamtime set to: %s' % client.var(self, 'teamtime').value)
+        self.verbose('client variable teamtime set to: %s' % client.var(self, 'teamtime').value)
         # remember current stats so we can tell how the player
         # is performing on the new team
         self._saveTeamvars(client)
 
         if not self._matchmode and client.isvar(self, 'paforced'):
-            forcedTeam = client.var(self, 'paforced').value
-            if team != b3.TEAM_UNKNOWN and team != self.console.getTeam(forcedTeam):
-                self.console.write('forceteam %s %s' % (client.cid, forcedTeam))
+            forcedteam = client.var(self, 'paforced').value
+            if team != b3.TEAM_UNKNOWN and team != self.console.getTeam(forcedteam):
+                self.console.write('forceteam %s %s' % (client.cid, forcedteam))
                 client.message('^1You are LOCKED! You are NOT allowed to switch!')
-                self.verbose('%s was locked and forced back to %s' % (client.name, forcedTeam))
+                self.verbose('%s was locked and forced back to %s' % (client.name, forcedteam))
                 # Break out of this function, nothing more to do here
             return None
 
@@ -2138,9 +2425,9 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 return None
 
             if self.isEnabled() and not self._balancing:
-            # set balancing flag
+                # set balancing flag
                 self._balancing = True
-                self.verbose('Teamchanged cid: %s, name: %s, team: %s' % (client.cid, client.name, team))
+                self.verbose('teamchanged cid: %s, name: %s, team: %s' % (client.cid, client.name, team))
 
                 # are we supposed to be balanced?
                 if client.maxLevel >= self._tmaxlevel:
@@ -2150,12 +2437,12 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
                 # did player join spectators?
                 if team == b3.TEAM_SPEC:
-                    self.verbose('Player joined specs')
+                    self.verbose('player joined specs')
                     # done balancing
                     self._balancing = False
                     return None
                 elif team == b3.TEAM_UNKNOWN:
-                    self.verbose('Team is unknown')
+                    self.verbose('team is unknown')
                     # done balancing
                     self._balancing = False
                     return None
@@ -2163,38 +2450,45 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 # check if player was allowed to join this team
                 if not self.countteams():
                     self._balancing = False
-                    self.error('Aborting teambalance. Counting teams failed!')
+                    self.error('aborting teambalance: counting teams failed!')
                     return False
                 if abs(self._teamred - self._teamblue) <= self._teamdiff:
                     # teams are balanced
-                    self.verbose('Teams are balanced, red: %s, blue: %s' % (self._teamred, self._teamblue))
+                    self.verbose('teams are balanced, red: %s, blue: %s' % (self._teamred, self._teamblue))
                     # done balancing
                     self._balancing = False
                     return None
                 else:
                     # teams are not balanced
-                    self.verbose('Teams are NOT balanced, red: %s, blue: %s' % (self._teamred, self._teamblue))
+                    self.verbose('teams are NOT balanced, red: %s, blue: %s' % (self._teamred, self._teamblue))
 
                     # switch is not allowed, so this should be a client suicide, not a legit switch.
                     # added as anti stats-harvest-exploit measure. One suicide is added as extra penalty for harvesting.
                     if self.console:
+
                         self.verbose('Applying Teamswitch penalties')
                         self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_SUICIDE,
-                            (100, 'penalty', 'body', 'Team_Switch_Penalty'), client, client))
+                                                                (100, 'penalty', 'body', 'Team_Switch_Penalty'),
+                                                                client,
+                                                                client))
+
                         self.console.queueEvent(b3.events.Event(b3.events.EVT_CLIENT_SUICIDE,
-                            (100, 'penalty', 'body', 'Team_Switch_Penalty'), client, client))
+                                                                (100, 'penalty', 'body', 'Team_Switch_Penalty'),
+                                                                client,
+                                                                client))
+
                         plugin = self.console.getPlugin('xlrstats')
                         if plugin:
-                            client.message(
-                                'Switching made teams unfair. Points where deducted from your stats as a penalty!')
+                            client.message('Switching made teams unfair. Points where deducted from your stats \
+                                            as a penalty!')
 
                     if self._teamred > self._teamblue:
                         # join the blue team
-                        self.verbose('Forcing %s to the Blue team' % client.name)
+                        self.verbose('forcing %s to the Blue team' % client.name)
                         self.console.write('forceteam %s blue' % client.cid)
                     else:
                         # join the red team
-                        self.verbose('Forcing %s to the Red team' % client.name)
+                        self.verbose('forcing %s to the Red team' % client.name)
                         self.console.write('forceteam %s red' % client.cid)
 
                 # done balancing
@@ -2210,38 +2504,37 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             self._teamred = len(self.console.getCvar('g_redteamlist').getString())
             self._teamblue = len(self.console.getCvar('g_blueteamlist').getString())
             return True
-        except:
+        except Exception:
             return False
 
     def _getGameType(self):
-        # g_gametype //0=FreeForAll=dm, 3=TeamDeathMatch=tdm, 4=Team Survivor=ts,
-        # 5=Follow the Leader=ftl, 6=Capture and Hold=cah, 7=Capture The Flag=ctf, 8=Bombmode=bm
+        # g_gametype //0 = FreeForAll = dm, 3 = TeamDeathMatch = tdm, 4 = Team Survivor = ts,
+        # 5 = Follow the Leader = ftl, 6 = Capture and Hold = cah, 7 = Capture The Flag = ctf, 8 = Bombmode = bm
 
         # 10/22/2008 - 1.4.0b10 - mindriot
         # if gametype is unknown when B3 is started in the middle of a game
-        if self.console.game.gameType == None:
+        if self.console.game.gameType is None:
             try:
                 # find and set current gametype
                 self.console.game.gameType = self.console.defineGameType(self.console.getCvar('g_gametype').getString())
-                self.debug('Current gametype found - changed to (%s)', self.console.game.gameType)
-            except:
-                self.debug('Unable to determine current gametype - remains at (%s)', self.console.game.gameType)
+                self.debug('current gametype found - changed to (%s)', self.console.game.gameType)
+            except Exception:
+                self.debug('unable to determine current gametype - remains at (%s)', self.console.game.gameType)
 
         return self.console.game.gameType
 
     def teamcheck(self):
         gametype = self._getGameType()
 
-        # run teambalance only if current gametype is in autobalance_gametypes list
-        try:
-            self._autobalance_gametypes_array.index(gametype)
-        except:
-            self.debug('Current gametype (%s) is not specified in autobalance_gametypes - teambalancer disabled',
-                self.console.game.gameType)
+        # run teambalance only if current gametype
+        # is in autobalance_gametypes list
+        if not gametype in self._autobalance_gametypes_array:
+            self.debug('current gametype (%s) is not specified in autobalance_gametypes - teambalancer disabled',
+                       gametype)
             return None
 
         if self._skill_balance_mode != 0:
-            self.debug('Skill balancer is active, not performing classic teamcheck');
+            self.debug('skill balancer is active, not performing classic teamcheck');
 
         if self.console.time() > self._ignoreTill:
             self.teambalance()
@@ -2250,28 +2543,28 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
     def teambalance(self):
         if self.isEnabled() and not self._balancing and not self._matchmode:
-            #set balancing flag
+            # set balancing flag
             self._balancing = True
-            self.verbose('Checking for balancing')
+            self.verbose('checking for balancing')
 
             if not self.countteams():
                 self._balancing = False
-                self.warning('Aborting teambalance. Counting teams failed!')
+                self.warning('aborting teambalance: counting teams failed!')
                 return False
 
             if abs(self._teamred - self._teamblue) <= self._teamdiff:
-                #teams are balanced
+                # teams are balanced
                 self._teamsbalanced = True
-                self.verbose('Teambalance: Teams are balanced, red: %s, blue: %s (diff: %s)' % (
-                    self._teamred, self._teamblue, self._teamdiff))
-                #done balancing
+                self.verbose('Teambalance: teams are balanced, red: %s, blue: %s (diff: %s)' % (
+                             self._teamred, self._teamblue, self._teamdiff))
+                # done balancing
                 self._balancing = False
                 return True
             else:
                 #teams are not balanced
                 self._teamsbalanced = False
-                self.verbose('Teambalance: Teams are NOT balanced, red: %s, blue: %s (diff: %s)' % (
-                    self._teamred, self._teamblue, self._teamdiff))
+                self.verbose('Teambalance: teams are NOT balanced, red: %s, blue: %s (diff: %s)' % (
+                             self._teamred, self._teamblue, self._teamdiff))
                 if self._announce == 1:
                     self.console.write('say Autobalancing Teams!')
                 elif self._announce == 2:
@@ -2283,13 +2576,14 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 else:
                     newteam = 'red'
                     oldteam = b3.TEAM_BLUE
-                self.verbose('Smaller team is: %s' % newteam)
 
-                #endless loop protection
+                self.verbose('smaller team is: %s' % newteam)
+
+                # endless loop protection
                 count = 25
                 while abs(self._teamred - self._teamblue) > self._teamdiff and count > 0:
                     stime = self.console.upTime()
-                    self.verbose('Uptime bot: %s' % stime)
+                    self.verbose('uptime bot: %s' % stime)
                     forceclient = None
                     clients = self.console.clients.getList()
                     for c in clients:
@@ -2298,42 +2592,45 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                             # 10/22/2008 - 1.4.0b11 - mindriot
                             # store the time of teamjoin for autobalancing purposes
                             c.setvar(self, 'teamtime', self.console.time())
-                            self.verbose('Client variable teamtime set to: %s' % c.var(self, 'teamtime').value)
+                            self.verbose('client variable teamtime set to: %s' % c.var(self, 'teamtime').value)
 
-                        if self.console.time() - c.var(self,
-                            'teamtime').value < stime and c.team == oldteam and c.maxLevel < self._tmaxlevel and not c.isvar(
-                            self, 'paforced'):
+                        if self.console.time() - c.var(self, 'teamtime').value < stime and \
+                           c.team == oldteam and c.maxLevel < self._tmaxlevel and not c.isvar(self, 'paforced'):
                             forceclient = c.cid
                             stime = self.console.time() - c.var(self, 'teamtime').value
 
                     if forceclient:
                         if newteam:
-                            self.verbose('Forcing client: %s to team: %s' % (forceclient, newteam))
+                            self.verbose('forcing client: %s to team: %s' % (forceclient, newteam))
                             self.console.write('forceteam %s %s' % (forceclient, newteam))
                         else:
-                            self.debug('No new team to force to')
+                            self.debug('no new team to force to')
                     else:
                         self.debug('No client to force')
+
                     count -= 1
-                    #recount the teams... do we need to balance once more?
+                    # recount the teams... do we need to balance once more?
                     if not self.countteams():
                         self._balancing = False
-                        self.error('Aborting teambalance. Counting teams failed!')
+                        self.error('aborting teambalance: counting teams failed!')
                         return False
 
                     # 10/28/2008 - 1.4.0b13 - mindriot
-                    self.verbose(
-                        'Teambalance: red: %s, blue: %s (diff: %s)' % (self._teamred, self._teamblue, self._teamdiff))
+                    self.verbose('Teambalance: red: %s, blue: %s (diff: %s)' %
+                                 (self._teamred, self._teamblue, self._teamdiff))
+
                     if self._teamred > self._teamblue:
                         newteam = 'blue'
                         oldteam = b3.TEAM_RED
                     else:
                         newteam = 'red'
                         oldteam = b3.TEAM_BLUE
-                    self.verbose('Smaller team is: %s' % newteam)
 
-            #done balancing
+                    self.verbose('smaller team is: %s' % newteam)
+
+            # done balancing
             self._balancing = False
+
         return True
 
     def resetTeamLocks(self):
@@ -2346,15 +2643,16 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         return None
 
 #---Dupes/Forbidden Names Mechanism----------------------------------------------------------------
+
     def namecheck(self):
         if self._matchmode:
             return None
 
-        self.debug('Checking Names')
+        self.debug('checking names')
         d = {}
         if self.isEnabled() and self.console.time() > self._ignoreTill:
             for player in self.console.clients.getList():
-                if not d.has_key(player.name):
+                if not player.name in d.keys():
                     d[player.name] = [player.cid]
                 else:
                     #l = d[player.name]
@@ -2364,7 +2662,11 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
             for pname, cidlist in d.items():
                 if self._checkdupes and len(cidlist) > 1:
-                    self.info("Warning Players %s for using the same name" % (", ".join(["%s <%s> @%s" % (c.exactName, c.cid, c.id) for c in map(self.console.clients.getByCID, cidlist)])))
+                    self.info("warning players %s for using the same name" %
+                              (", ".join(["%s <%s> @%s" %
+                                         (c.exactName, c.cid, c.id) for c in
+                                          map(self.console.clients.getByCID, cidlist)])))
+
                     for cid in cidlist:
                         client = self.console.clients.getByCID(cid)
                         self._adminPlugin.warnClient(client, 'badname')
@@ -2372,13 +2674,15 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 if self._checkunknown and pname == self.console.stripColors('New UrT Player'):
                     for cid in cidlist:
                         client = self.console.clients.getByCID(cid)
-                        self.info("Warning Player %s <%s> @%s for using forbidden name 'New UrT Player'" % (client.exactName, client.cid, client.id))
+                        self.info("warning player %s <%s> @%s for using forbidden name 'New UrT Player'" %
+                                  (client.exactName, client.cid, client.id))
                         self._adminPlugin.warnClient(client, 'badname')
 
                 if self._checkbadnames and pname == 'all':
                     for cid in cidlist:
                         client = self.console.clients.getByCID(cid)
-                        self.info("Warning Player %s <%s> @%s for using forbidden name 'all'" % (client.exactName, client.cid, client.id))
+                        self.info("warning player %s <%s> @%s for using forbidden name 'all'" %
+                                  (client.exactName, client.cid, client.id))
                         self._adminPlugin.warnClient(client, 'badname')
 
         return None
@@ -2418,21 +2722,21 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             self.debug('Namechanges Reset')
         return None
 
-
 #---Vote delayer at round start--------------------------------------------------------------------
+
     def votedelay(self, data=None):
         if not data:
             data = 'on'
         self.cmd_pavote(data)
 
-
 #---Spectator Checking-----------------------------------------------------------------------------
+
     def speccheck(self):
         if self.isEnabled() and self._g_maxGameClients == 0 and not self._matchmode:
-            self.debug('Checking for idle Spectators')
+            self.debug('checking for idle spectators')
             clients = self.console.clients.getList()
             if len(clients) < self._smaxplayers:
-                self.verbose('Clients online (%s) < maxplayers (%s), ignoring' % (len(clients), self._smaxplayers))
+                self.verbose('clients online (%s) < maxplayers (%s), ignoring' % (len(clients), self._smaxplayers))
                 return None
 
             for c in clients:
@@ -2441,54 +2745,54 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                     # 10/22/2008 - 1.4.0b11 - mindriot
                     # store the time of teamjoin for autobalancing purposes
                     c.setvar(self, 'teamtime', self.console.time())
-                    self.verbose('Client variable teamtime set to: %s' % c.var(self, 'teamtime').value)
+                    self.verbose('client variable teamtime set to: %s' % c.var(self, 'teamtime').value)
 
                 if c.maxLevel >= self._smaxlevel:
-                    self.debug('%s is allowed to idle in spec.' % c.name)
+                    self.debug('%s is allowed to idle in spec' % c.name)
                     continue
                 elif c.isvar(self, 'paforced'):
-                    self.debug('%s is forced by an admin.' % c.name)
+                    self.debug('%s is forced by an admin' % c.name)
                     continue
                 elif c.team == b3.TEAM_SPEC and (self.console.time() - c.var(self, 'teamtime').value) > \
                         (self._smaxspectime * 60):
-                    self.debug('Warning %s for speccing on full server.' % c.name)
+                    self.debug('warning %s for speccing on full server' % c.name)
                     self._adminPlugin.warnClient(c, 'spec')
 
         return None
 
-
 #---Bot support------------------------------------------------------------------------------------
+
     def botsupport(self, data=None):
-        self.debug('Checking for bot support')
+        self.debug('checking for bot support')
         if self.isEnabled() and not self._matchmode:
+
             try:
                 test = self.console.game.mapName
-            except:
+            except AttributeError:
                 self.debug('mapName not yet available')
                 return None
 
             if not self._botenable:
                 return None
+
             for m in self._botmaps:
                 if m == self.console.game.mapName:
                     # we got ourselves a winner
-                    self.debug('Enabling bots for this map')
+                    self.debug('enabling bots for this map: %s' % self.console.game.mapName)
                     self.botsenable()
 
         return None
 
     def botsdisable(self):
-        self.debug('Disabling the bots')
+        self.debug('disabling the bots')
         self.console.write('set bot_minplayers 0')
-        return None
 
     def botsenable(self):
-        self.debug('Enabling the bots')
-        self.console.write('set bot_minplayers %s' % (self._botminplayers))
-        return None
-
+        self.debug('enabling the bots')
+        self.console.write('set bot_minplayers %s' % self._botminplayers)
 
 #---Headshot Counter-------------------------------------------------------------------------------
+
     def setupVars(self, client):
         if not client.isvar(self, 'totalhits'):
             client.setvar(self, 'totalhits', 0.00)
@@ -2502,6 +2806,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             client.setvar(self, 'helmethits', 0.00)
         if not client.isvar(self, 'torsohitted'):
             client.setvar(self, 'torsohitted', 0.00)
+
         client.setvar(self, 'hitvars', True)
         self.debug('ClientVars set up for %s' % client.name)
 
@@ -2516,12 +2821,13 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                     c.setvar(self, 'headhitted', 0.00)
                     c.setvar(self, 'helmethits', 0.00)
                     c.setvar(self, 'torsohitted', 0.00)
+
             self.debug('ClientVars Reset')
         return None
 
     def headshotcounter(self, attacker, victim, data):
-        if self.isEnabled() and self._hsenable and attacker.isvar(self, 'hitvars') and victim.isvar(self,
-            'hitvars') and not self._matchmode:
+        if self.isEnabled() and self._hsenable and attacker.isvar(self, 'hitvars') and \
+           victim.isvar(self, 'hitvars') and not self._matchmode:
             headshots = 0
             #damage = int(data[0])
             weapon = data[1]
@@ -2534,54 +2840,59 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             victim.setvar(self, 'totalhitted', t)
 
             # headshots... no helmet!
-            if hitloc == self.HL_HEAD:
+            if hitloc == self._hitlocations['HL_HEAD']:
                 t = attacker.var(self, 'headhits').value + 1
                 attacker.setvar(self, 'headhits', t)
                 t = victim.var(self, 'headhitted').value + 1
                 victim.setvar(self, 'headhitted', t)
 
             # helmethits
-            elif hitloc == self.HL_HELMET:
+            elif hitloc == self._hitlocations['HL_HELMET']:
                 t = attacker.var(self, 'helmethits').value + 1
                 attacker.setvar(self, 'helmethits', t)
 
             # torso... no kevlar!
-            elif hitloc == self.HL_TORSO:
+            elif hitloc == self._hitlocations['HL_TORSO']:
                 t = victim.var(self, 'torsohitted').value + 1
                 victim.setvar(self, 'torsohitted', t)
 
             # announce headshots
-            if self._hsall == True and hitloc in (self.HL_HEAD, self.HL_HELMET):
+            if self._hsall and hitloc in (self._hitlocations['HL_HEAD'], self._hitlocations['HL_HELMET']):
                 headshots = attacker.var(self, 'headhits').value + attacker.var(self, 'helmethits').value
                 hstext = 'headshots'
                 if headshots == 1:
                     hstext = 'headshot'
 
                 percentage = int(headshots / attacker.var(self, 'totalhits').value * 100)
-                if self._hspercent == True and headshots > 5 and percentage > self._hspercentmin:
+                if self._hspercent and headshots > 5 and percentage > self._hspercentmin:
                     message = ('^2%s^7: %s %s! ^7(%s percent)' % (attacker.name, int(headshots), hstext, percentage))
                 else:
                     message = ('^2%s^7: %s %s!' % (attacker.name, int(headshots), hstext))
 
-                if self._hsbroadcast == True:
+                if self._hsbroadcast:
                     self.console.write(message)
                 else:
                     self.console.say(message)
 
             # wear a helmet!
-            if self._hswarnhelmet == True and victim.connections < 20 and victim.var(self,
-                'headhitted').value == self._hswarnhelmetnr and hitloc == 0:
+            if self._hswarnhelmet and \
+                    victim.connections < 20 and \
+                    victim.var(self, 'headhitted').value == self._hswarnhelmetnr and \
+                    hitloc == 0:
                 victim.message('You were hit in the head %s times! Consider wearing a helmet!' % self._hswarnhelmetnr)
 
             # wear kevlar!
-            if self._hswarnkevlar == True and victim.connections < 20 and victim.var(self,
-                'torsohitted').value == self._hswarnkevlarnr and hitloc == 2:
-                victim.message(
-                    'You were hit in the torso %s times! Wearing kevlar will reduce your number of deaths!' % self._hswarnkevlarnr)
+            if self._hswarnkevlar and \
+                    victim.connections < 20 and \
+                    victim.var(self, 'torsohitted').value == self._hswarnkevlarnr and \
+                    hitloc == 2:
+                victim.message('You were hit in the torso %s times! Wearing kevlar will reduce \
+                                your number of deaths!' % self._hswarnkevlarnr)
 
         return None
 
 #---Rotation Manager-------------------------------------------------------------------------------
+
     def adjustrotation(self, delta):
         # if the round just started, don't do anything
         if self.console.time() < self._dontcount:
@@ -2604,12 +2915,16 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 self.setrotation(3)
 
         else:
-            self.error('Error: Invalid delta passed to adjustrotation')
+            self.error('invalid delta passed to adjustrotation')
 
         return None
 
     def setrotation(self, newrotation):
-        if not self._gamepath or not self._rotation_small or not self._rotation_medium or not self._rotation_large or not self._mapchanged:
+        if not self._gamepath or \
+                not self._rotation_small or \
+                not self._rotation_medium or \
+                not self._rotation_large or \
+                not self._mapchanged:
             return None
 
         if newrotation == self._currentrotation:
@@ -2648,8 +2963,6 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             self.adjustrotation(+1)
         elif self._playercount < self._oldplayercount:
             self.adjustrotation(-1)
-        else:
-            pass
 
 #--Support Functions------------------------------------------------------------------------------
 
@@ -2678,184 +2991,177 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         else:
             return False
 
-
 #--Rcon commands------by:FSK405|Fear--------------------------------------------------------------
-# setnextmap <mapname>
-# respawngod <seconds>
-# respawndelay <seconds>
-# caplimit <caps>
-# fraglimit <frags>
-# waverespawns <on/off>
-# bluewave <seconds>
-# redwave <seconds>
-# timelimit <minutes>
-# hotpotato <minutes>
+#   setnextmap <mapname>
+#   respawngod <seconds>
+#   respawndelay <seconds>
+#   caplimit <caps>
+#   fraglimit <frags>
+#   waverespawns <on/off>
+#   bluewave <seconds>
+#   redwave <seconds>
+#   timelimit <minutes>
+#   hotpotato <minutes>
 
     def cmd_pawaverespawns(self, data, client, cmd=None):
         """\
         <on/off> - Set waverespawns on, or off.
         """
         if not data or data not in ('on', 'off'):
-            client.message('^7Invalid or missing data, try !help waverespawns')
-            return False
-        else:
-            if data == 'on':
-                self.console.setCvar('g_waverespawns', '1')
-                self.console.say('^7Wave Respawns: ^2ON')
-            elif data == 'off':
-                self.console.setCvar('g_waverespawns', '0')
-                self.console.say('^7Wave Respawns: ^9OFF')
-        return True
+            client.message('^7Invalid or missing data, try !help pawaverespawns')
+            return
+
+        if data == 'on':
+            self.console.setCvar('g_waverespawns', '1')
+            self.console.say('^7Wave Respawns: ^2ON')
+        elif data == 'off':
+            self.console.setCvar('g_waverespawns', '0')
+            self.console.say('^7Wave Respawns: ^1OFF')
 
     def cmd_pasetnextmap(self, data, client=None, cmd=None):
         """\
         <mapname> - Set the nextmap (partial map name works)
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help setnextmap')
+            client.message('^7Invalid or missing data, try !help pasetnextmap')
+            return
+
+        match = self.console.getMapsSoundingLike(data)
+        if isinstance(match, basestring):
+            mapname = match
+            self.console.setCvar('g_nextmap', mapname)
+            if client:
+                client.message('^7nextmap set to %s' % mapname)
+        elif isinstance(match, list):
+            client.message('do you mean : %s ?' % string.join(match[:5], ', '))
         else:
-            match = self.console.getMapsSoundingLike(data)
-            if isinstance(match, basestring):
-                mapname = match
-                self.console.write('g_nextmap %s' % mapname)
-                if client:
-                    client.message('^7nextmap set to %s' % mapname)
-            elif isinstance(match, list):
-                client.message('do you mean : %s ?' % string.join(match[:5],', '))
-            else:
-                client.message('^7cannot find any map like [^4%s^7].' % data)
+            client.message('^7cannot find any map like [^4%s^7]' % data)
 
     def cmd_parespawngod(self, data, client, cmd=None):
         """\
         <seconds> - Set the respawn protection in seconds.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help respawngod')
-            return False
-        else:
-            self.console.write('g_respawnProtection "%s"' % data)
-        return True
+            client.message('^7Missing data, try !help parespawngod')
+            return
+
+        self.console.setCvar('g_respawnProtection', data)
 
     def cmd_parespawndelay(self, data, client, cmd=None):
         """\
         <seconds> - Set the respawn delay in seconds.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help respawndelay')
-            return False
-        else:
-            self.console.write('g_respawnDelay "%s"' % data)
-        return True
+            client.message('^7Missing data, try !help parespawndelay')
+            return
+
+        self.console.setCvar('g_respawnDelay', data)
 
     def cmd_pacaplimit(self, data, client, cmd=None):
         """\
         <caps> - Set the ammount of flagcaps before map is over.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help caplimit')
-            return False
-        else:
-            self.console.write('capturelimit "%s"' % data)
-        return True
+            client.message('^7Missing data, try !help pacaplimit')
+            return
+
+        self.console.setCvar('capturelimit', data)
 
     def cmd_patimelimit(self, data, client, cmd=None):
         """\
         <minutes> - Set the minutes before map is over.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help timelimit')
-            return False
-        else:
-            self.console.write('timelimit "%s"' % data)
-        return True
+            client.message('^7Missing data, try !help patimelimit')
+            return
+
+        self.console.setCvar('timelimit', data)
 
     def cmd_pafraglimit(self, data, client, cmd=None):
         """\
         <frags> - Set the ammount of points to be scored before map is over.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help fraglimit')
-            return False
-        else:
-            self.console.write('fraglimit "%s"' % data)
-        return True
+            client.message('^7Missing data, try !help pafraglimit')
+            return
+
+        self.console.setCvar('fraglimit', data)
 
     def cmd_pabluewave(self, data, client, cmd=None):
         """\
         <seconds> - Set the blue wave respawn time.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help bluewave')
+            client.message('^7Missing data, try !help pabluewave')
             return False
-        else:
-            self.console.write('g_bluewave "%s"' % data)
-        return True
+
+        self.console.setCvar('g_bluewave', data)
 
     def cmd_paredwave(self, data, client, cmd=None):
         """\
         <seconds> - Set the red wave respawn time.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help redwave')
+            client.message('^7Missing data, try !help paredwave')
             return False
-        else:
-            self.console.write('g_redwave "%s"' % data)
-        return True
+
+        self.console.setCvar('g_redwave', data)
 
     def cmd_pahotpotato(self, data, client, cmd=None):
         """\
         <minutes> - Set the flag explode time.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help hotpotato')
+            client.message('^7Missing data, try !help pahotpotato')
             return False
-        else:
-            self.console.write('g_hotpotato "%s"' % data)
-        return True
 
+        self.console.setCvar('g_hotpotato', data)
 
-    #------------- SGT --------------------------------------------
+#------------- SGT --------------------------------------------
+
     def cmd_pasetwave(self, data, client, cmd=None):
         """\
         <seconds> - Set the wave respawn time for both teams.
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help setwave')
-            return False
-        else:
-            self.console.write('g_bluewave "%s"' % data)
-            self.console.write('g_redwave "%s"' % data)
-            return True
+            client.message('^7Missing data, try !help pasetwave')
+            return
+
+        self.console.setCvar('g_bluewave', data)
+        self.console.setCvar('g_redwave', data)
 
     def cmd_pasetgravity(self, data, client, cmd=None):
         """\
         <value> - Set the gravity value. default = 800 (less means less gravity)
         """
         if not data:
-            client.message('^7Invalid or missing data, try !help pasetgravity')
-            return False
+            client.message('^7Missing data, try !help pasetgravity')
+            return
+
         if data == 'def':
             data = 800
+
         self.console.setCvar('g_gravity', data)
         client.message('^7Gravity: %s' % data)
-        return True
 
     def set_configmode(self, mode=None):
         if mode:
-            if self.gameconfig.has_key('mode_%s' % mode):
-                cfgfile = self.gameconfig.get('mode_%s' % mode)
+            modestring = 'mode_%s' % mode
+            if modestring in self._gameconfig:
+                cfgfile = self._gameconfig.get(modestring)
                 filename = os.path.join(self.console.game.fs_homepath, self.console.game.fs_game, cfgfile)
                 if os.path.isfile(filename):
-                    self.debug('Executing configfile = [%s]', cfgfile)
+                    self.debug('executing config file: %s', cfgfile)
                     self.console.write('exec %s' % cfgfile)
+
         cfgfile = None
         if self._matchmode:
-            cfgfile = self.gameconfig.get('matchon', None)
+            cfgfile = self._gameconfig.get('matchon', None)
         else:
-            cfgfile = self.gameconfig.get('matchoff', None)
+            cfgfile = self._gameconfig.get('matchoff', None)
+
         if cfgfile:
             filename = os.path.join(self.console.game.fs_homepath, self.console.game.fs_game, cfgfile)
             if os.path.isfile(filename):
-                self.debug('Executing configfile = [%s]', cfgfile)
+                self.debug('executing configfile: %s', cfgfile)
                 self.console.write('exec %s' % cfgfile)
-
