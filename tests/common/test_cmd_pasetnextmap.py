@@ -45,7 +45,7 @@ pasetnextmap-snmap: 20
     def test_missing_parameter(self):
         self.moderator.clearMessageHistory()
         self.moderator.says("!snmap")
-        self.assertEqual(['Invalid or missing data, try !help setnextmap'], self.moderator.message_history)
+        self.assertEqual(['Invalid or missing data, try !help pasetnextmap'], self.moderator.message_history)
 
 
     def test_existing_map(self):

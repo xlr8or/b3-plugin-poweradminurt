@@ -465,13 +465,27 @@ Changelog
   - !pasetnextmap command displays at most 5 map suggestions
 1.15 -  09/10/2013 - Courgette
   - !paident command now shows the auth name from the Frozen Sand account (UrT 4.2 only)
-
+1.16 - 10/11/2013 - Fenix
+  - refactored plugin syntax to match PEP8 conding style guide
+  - more verbose logging on plugin configuration
+  - catch all raised exception instead of discarding them
+  - correctly use config getFloat method when needed
+  - log message consistency (used same pattern for plugin configuration log messages)
+  - declare missing attributes
+  - flagged some attributes with correct scope (protected)
+  - correctly declare lists as lists instead of dictionaries
+  - renamed variables using python reserved symbols
+  - fixed forceteam %s spectate: spectate is not interpreted by the gamecode
+  - added missing command descriptions
+  - fixed some in-game message spelling
+  - replaced color code ^9 with ^1 -> red in both 4.1 and 4.2
+  - make use of self.console.setCvar when possible
 
 Credit
 ------
 
 Original author : xlr8or
-Contributors : Courgette, mindriot, FSK405|Fear, naixn, BlackMamba, SGT
+Contributors : Courgette, mindriot, FSK405|Fear, naixn, BlackMamba, SGT, Fenix
 
 
 

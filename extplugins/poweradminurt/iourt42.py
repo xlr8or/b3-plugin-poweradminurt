@@ -16,57 +16,69 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
-from poweradminurt.iourt41 import Poweradminurt41Plugin
+
 import b3.plugin
+
+from poweradminurt.iourt41 import Poweradminurt41Plugin
 from poweradminurt import __version__, __author__
+
+import ConfigParser
 
 
 class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     def __init__(self, console, config=None):
+
         b3.plugin.Plugin.__init__(self, console, config)
         if self.console.gameName != 'iourt42':
             self.critical("unsupported game : %s" % self.console.gameName)
             raise SystemExit(220)
 
         ### hit location constants ###
-        try:
-            self.HL_HEAD = self.console.HL_HEAD
-        except AttributeError, err:
-            self.warning("could not get HL_HEAD value from B3 parser. %s" % err)
-            self.HL_HEAD = '1'
-        self.debug("HL_HEAD is %s" % self.HL_HEAD)
 
         try:
-            self.HL_HELMET = self.console.HL_HELMET
-        except AttributeError, err:
-            self.warning("could not get HL_HELMET value from B3 parser. %s" % err)
-            self.HL_HELMET = '2'
-        self.debug("HL_HELMET is %s" % self.HL_HELMET)
+            self._hitlocations['HL_HEAD'] = self.console.HL_HEAD
+        except AttributeError, e:
+            self._hitlocations['HL_HEAD'] = '1'
+            self.warning("could not get HL_HEAD value from B3 parser: %s" % e)
+
+        self.debug("HL_HEAD is %s" % self._hitlocations['HL_HEAD'])
 
         try:
-            self.HL_TORSO = self.console.HL_TORSO
-        except AttributeError, err:
-            self.warning("could not get HL_TORSO value from B3 parser. %s" % err)
-            self.HL_TORSO = '3'
-        self.debug("HL_TORSO is %s" % self.HL_TORSO)
+            self._hitlocations['HL_HELMET'] = self.console.HL_HELMET
+        except AttributeError, e:
+            self._hitlocations['HL_HELMET'] = '2'
+            self.warning("could not get HL_HELMET value from B3 parser: %s" % e)
+
+        self.debug("HL_HELMET is %s" % self._hitlocations['HL_HELMET'])
+
+        try:
+            self._hitlocations['HL_TORSO'] = self.console.HL_TORSO
+        except AttributeError, e:
+            self._hitlocations['HL_TORSO'] = '3'
+            self.warning("could not get HL_TORSO value from B3 parser: %s" % e)
+
+        self.debug("HL_TORSO is %s" % self._hitlocations['HL_TORSO'])
 
     # radio spam protection
     _rsp_enable = False
-    _rsp_mute_duration = 4
-    _rsp_falloffRate = 2 # spam points will fall off by 1 point every 4 seconds
+    _rsp_mute_duration = 2
+    _rsp_falloffRate = 2  # spam points will fall off by 1 point every 4 seconds
     _rsp_maxSpamins = 10
 
-
     def registerEvents(self):
+        """\
+        Register events needed
+        """
         Poweradminurt41Plugin.registerEvents(self)
         self.registerEvent(self.console.EVT_CLIENT_RADIO)
 
-
     def onLoadConfig(self):
+        """\
+        Load plugin configuration
+        """
         Poweradminurt41Plugin.onLoadConfig(self)
-        self.LoadRadioSpamProtection()
-
+        self.loadRadioSpamProtection()
 
     def onEvent(self, event):
         """\
@@ -77,32 +89,41 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         else:
             Poweradminurt41Plugin.onEvent(self, event)
 
-
     ###############################################################################################
     #
     #    config loaders
     #
     ###############################################################################################
 
-    def LoadRadioSpamProtection(self):
+    def loadRadioSpamProtection(self):
+        """\
+        Setup the radio spam protection
+        """
         try:
             self._rsp_enable = self.config.getboolean('radio_spam_protection', 'enable')
-            self.info("radio_spam_protection : " + ("enabled" if self._rsp_enable else "disabled"))
-        except Exception, err:
-            self.warning(err)
-            self._rsp_enable = False
-            self.debug('Using default value (%s) for radio_spam_protection/enable', self._rsp_enable)
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find radio_spam_protection/enable in config file, using default: %s' %
+                         self._rsp_enable)
+        except ValueError, e:
+            self.error('Could not load radio_spam_protection/enable config value: %s' % e)
+            self.debug('Using default value (%s) for radio_spam_protection/enable' % self._rsp_enable)
 
         try:
+
             self._rsp_mute_duration = self.config.getint('radio_spam_protection', 'mute_duration')
             if self._rsp_mute_duration < 1:
                 raise ValueError('radio_spam_protection/mute_duration cannot be lower than 1')
-            self.info("radio_spam_protection/mute_duration : %s seconds" % self._rsp_mute_duration)
-        except Exception, err:
-            self.warning(err)
-            self._rsp_mute_duration = 2
-            self.debug('Using default value (%s) for radio_spam_protection/mute_duration', self._rsp_mute_duration)
 
+        except ConfigParser.NoOptionError:
+            self.warning('Could not find radio_spam_protection/mute_duration in config file, using default: %s' %
+                         self._rsp_mute_duration)
+        except ValueError, e:
+            self._rsp_mute_duration = 2  # set again because it might have been overwritten
+            self.error('Could not load radio_spam_protection/mute_duration config value: %s' % e)
+            self.debug('Using default value (%s) for radio_spam_protection/mute_duration' % self._rsp_mute_duration)
+
+        self.debug('Radio spam protection enable: %s' % self._rsp_enable)
+        self.debug('Radio spam protection mute duration: %s' % self._rsp_mute_duration)
 
     ###############################################################################################
     #
@@ -112,10 +133,11 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     def onRadio(self, event):
         """\
-        we received a radio event
+        Handle radio events
         """
         if not self._rsp_enable:
             return
+
         # event.data : {'msg_group': '7', 'msg_id': '2', 'location': 'New Alley', 'text': "I'm going for the flag" }
 
         client = event.client
@@ -162,7 +184,6 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             client.setvar(self, 'radio_spamins', int(self._rsp_maxSpamins / 2.0))
             client.setvar(self, 'radio_ignore_till', int(self.getTime() + self._rsp_mute_duration - 1))
 
-
     ###############################################################################################
     #
     #    commands
@@ -177,37 +198,36 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if not data:
             client.message('^7Invalid data, try !help pakill')
             return
-        else:
-            sclient = self._adminPlugin.findClientPrompt(data, client)
-            if not sclient:
-                # a player matchin the name was not found, a list of closest matches will be displayed
-                # we can exit here and the user will retry with a more specific player
-                return
+
+        sclient = self._adminPlugin.findClientPrompt(data, client)
+        if not sclient:
+            # a player matchin the name was not found, a list of closest matches will be displayed
+            # we can exit here and the user will retry with a more specific player
+            return
 
         self.console.write('smite %s' % sclient.cid)
-
 
     def cmd_palms(self, data, client, cmd=None):
         """\
         Change game type to Last Man Standing
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 1')
+        self.console.setCvar('g_gametype', '1')
         if client:
             client.message('^7game type changed to ^4Last Man Standing')
-        self.set_configmode('lms')
 
+        self.set_configmode('lms')
 
     def cmd_pajump(self, data, client, cmd=None):
         """\
         Change game type to Jump
         (You can safely use the command without the 'pa' at the beginning)
         """
-        self.console.write('g_gametype 9')
+        self.console.setCvar('g_gametype', '9')
         if client:
             client.message('^7game type changed to ^4Jump')
-        self.set_configmode('jump')
 
+        self.set_configmode('jump')
     
     def cmd_paskins(self, data, client, cmd=None):
         """\
@@ -217,15 +237,14 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help paskins')
             return
-        else:
-            if data == 'on':
-                self.console.setCvar('g_skins', 1)
-                self.console.say('^7Client skins: ^2ON')
-            elif data == 'off':
-                self.console.setCvar('g_skins', 0)
-                self.console.say('^7Client skins: ^9OFF')
-    
-    
+
+        if data == 'on':
+            self.console.setCvar('g_skins', '1')
+            self.console.say('^7Client skins: ^2ON')
+        elif data == 'off':
+            self.console.setCvar('g_skins', '0')
+            self.console.say('^7Client skins: ^1OFF')
+
     def cmd_pafunstuff(self, data, client, cmd=None):
         """\
         Set the use of funstuff <on/off>
@@ -234,15 +253,14 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help pafunstuff')
             return
-        else:
-            if data == 'on':
-                self.console.setCvar('g_funstuff', 1)
-                self.console.say('^7Funstuff: ^2ON')
-            elif data == 'off':
-                self.console.setCvar('g_funstuff', 0)
-                self.console.say('^7Funstuff: ^9OFF')
-                            
-    
+
+        if data == 'on':
+            self.console.setCvar('g_funstuff', 1)
+            self.console.say('^7Funstuff: ^2ON')
+        elif data == 'off':
+            self.console.setCvar('g_funstuff', 0)
+            self.console.say('^7Funstuff: ^1OFF')
+
     def cmd_pagoto(self, data, client, cmd=None):
         """\
         Set the goto <on/off>
@@ -251,15 +269,14 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if not data or data not in ('on', 'off'):
             client.message('^7Invalid or missing data, try !help pagoto')
             return
-        else:
-            if data == 'on':
-                self.console.setCvar('g_allowgoto', 1)
-                self.console.say('^7Goto: ^2ON')
-            elif data == 'off':
-                self.console.setCvar('g_allowgoto', 0)
-                self.console.say('^7Goto: ^9OFF')
-                
-                
+
+        if data == 'on':
+            self.console.setCvar('g_allowgoto', 1)
+            self.console.say('^7Goto: ^2ON')
+        elif data == 'off':
+            self.console.setCvar('g_allowgoto', 0)
+            self.console.say('^7Goto: ^1OFF')
+
     def cmd_pastamina(self, data, client, cmd=None):
         """\
         Set the stamina behavior <default/regain/infinite>
@@ -268,43 +285,41 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if not data or data not in ('default', 'regain', 'infinite'):
             client.message('^7Invalid or missing data, try !help pastamina')
             return
-        else:
-            if data == 'default':
-                self.console.setCvar('g_stamina', 0)
-                self.console.say('^7Stamina mode: ^3DEFAULT')
-            elif data == 'regain':
-                self.console.setCvar('g_stamina', 1)
-                self.console.say('^7Stamina mode: ^3REGAIN')
-            elif data == 'infinite':
-                self.console.setCvar('g_stamina', 2)
-                self.console.say('^7Stamina mode: ^3INFINITE')
+
+        if data == 'default':
+            self.console.setCvar('g_stamina', 0)
+            self.console.say('^7Stamina mode: ^3DEFAULT')
+        elif data == 'regain':
+            self.console.setCvar('g_stamina', 1)
+            self.console.say('^7Stamina mode: ^3REGAIN')
+        elif data == 'infinite':
+            self.console.setCvar('g_stamina', 2)
+            self.console.say('^7Stamina mode: ^3INFINITE')
 
     def cmd_paident(self, data, client=None, cmd=None):
         """\
         <name> - show the ip and guid and authname of a player
         (You can safely use the command without the 'pa' at the beginning)
         """
-        input = self._adminPlugin.parseUserCmd(data)
-        if not input:
-            cmd.sayLoudOrPM(client, 'Your id is ^2@%s' % (client.id))
-            return True
-        else:
-            # input[0] is the player id
-            sclient = self._adminPlugin.findClientPrompt(input[0], client)
-            if not sclient:
-                # a player matching the name was not found, a list of closest matches will be displayed
-                # we can exit here and the user will retry with a more specific player
-                return False
+        args = self._adminPlugin.parseUserCmd(data)
+        if not args:
+            cmd.sayLoudOrPM(client, 'Your id is ^2@%s' % client.id)
+            return
+
+        # args[0] is the player id
+        sclient = self._adminPlugin.findClientPrompt(args[0], client)
+        if not sclient:
+            # a player matching the name was not found, a list of closest matches will be displayed
+            # we can exit here and the user will retry with a more specific player
+            return
 
         if client.maxLevel < self._full_ident_level:
-            cmd.sayLoudOrPM(client,
-                '%s ^4@%s ^2%s' % (self.console.formatTime(self.console.time()), sclient.id, sclient.exactName))
+            cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s' % (self.console.formatTime(self.console.time()),
+                                                       sclient.id, sclient.exactName))
         else:
             cmd.sayLoudOrPM(client, '%s ^4@%s ^2%s ^2%s ^7[^2%s^7] since ^2%s' % (
                 self.console.formatTime(self.console.time()), sclient.id, sclient.exactName, sclient.ip, sclient.pbid,
                 self.console.formatTime(sclient.timeAdd)))
-        return True
-
 
     ###############################################################################################
     #
