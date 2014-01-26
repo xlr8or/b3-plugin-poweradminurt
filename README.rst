@@ -480,6 +480,9 @@ Changelog
   - fixed some in-game message spelling
   - replaced color code ^9 with ^1 -> red in both 4.1 and 4.2
   - make use of self.console.setCvar when possible
+1.16.1 - 2014/01/26 - Courgette
+  - fix !paset when used with no cvar value
+
 
 Credit
 ------

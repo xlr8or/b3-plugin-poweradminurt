@@ -1892,7 +1892,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         # are we still here? Let's write it to console
         args = data.split(' ', 1)
         cvar = args[0]
-        value = args[1]
+        value = args[1] if len(args) == 2 else ""
         self.console.setCvar(cvar, value)
 
     def cmd_paget(self, data, client, cmd=None):
