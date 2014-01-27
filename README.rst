@@ -482,6 +482,8 @@ Changelog
   - make use of self.console.setCvar when possible
 1.16.1 - 2014/01/26 - Courgette
   - fix !paset when used with no cvar value
+1.17 - 2014/01/27 - Fenix
+  - updated !pagear command for iourt42 game: it now works with weapon letters instead of bitmask
 
 
 Credit

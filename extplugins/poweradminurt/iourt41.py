@@ -158,7 +158,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         self.debug("HL_TORSO is %s" % self._hitlocations['HL_TORSO'])
 
-    def startup(self):
+    def onStartup(self):
         """\
         Initialize plugin settings
         """
@@ -198,7 +198,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         try:
             # save original vote settings
             self._origvote = self.console.getCvar('g_allowvote').getInt()
-        except Exception, e:
+        except ValueError, e:
             self.warning("could not retrieve g_allowvote CVAR value: %s" % e)
             self._origvote = 0  # no votes
 
@@ -216,9 +216,13 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         try:
             # save original gear settings
             self._origgear = self.console.getCvar('g_gear').getInt()
-        except Exception, e:
-            self.warning("could not retrieve g_gear CVAR value: %s" % e)
-            self._origgear = 0  # allow all weapons
+        except ValueError, e:
+            if self.console.gameName == 'iourt41':
+                # if the game is iourt42 don't log since the above cvar retrieval
+                # is going to raise an exception everytime: iourt42 uses a gear
+                # string instead of gear bitmask so int casting will raise a ValueError
+                self.warning("could not retrieve g_gear CVAR value: %s" % e)
+                self._origgear = 0  # allow all weapons
 
         self.installCrontabs()
 

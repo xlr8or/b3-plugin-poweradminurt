@@ -27,6 +27,11 @@ import ConfigParser
 
 class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
+    _gears = dict(none='FGHIJKLMNZacefghOQRSTUVWX', all='', reset='')
+    _weapons = dict(ber='F', de='G', glo='f', colt='g', spas='H', mp5='I', ump='J', mac='h', hk='K',
+                    lr='L', g36='M', psg='N', sr8='Z', ak='a', neg='c', m4='e', he='O', smo='Q',
+                    vest='R', hel='W', sil='U', las='V', med='T', nvg='S', ammo='X')
+
     def __init__(self, console, config=None):
 
         b3.plugin.Plugin.__init__(self, console, config)
@@ -65,6 +70,13 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     _rsp_mute_duration = 2
     _rsp_falloffRate = 2  # spam points will fall off by 1 point every 4 seconds
     _rsp_maxSpamins = 10
+
+    def onStartup(self):
+        """\
+        Initialize plugin settings
+        """
+        Poweradminurt41Plugin.onStartup(self)
+        self._gears['reset'] = self.console.getCvar('g_gear').getString()
 
     def registerEvents(self):
         """\
@@ -321,11 +333,105 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
                 self.console.formatTime(self.console.time()), sclient.id, sclient.exactName, sclient.ip, sclient.pbid,
                 self.console.formatTime(sclient.timeAdd)))
 
+    def cmd_pagear(self, data, client=None, cmd=None):
+        """\
+        [<gear>] - set the allowed gear on the server
+        """
+        if not data:
+            self.printgear(client=client, cmd=cmd)
+            return
+
+        # sanitize input
+        data = data.strip().lower()
+
+        # set a predefined gear
+        if data in self._gears.keys():
+            self.console.setCvar('g_gear', self._gears[data])
+            self.printgear(client=client, cmd=cmd, gearstr=self._gears[data])
+            return
+
+        # add a specific weapon to the current gear string
+        if data[:1] in ('+', '-') and data[1:] in self._weapons.keys():
+            opt = data[:1]
+            key = data[1:]
+            gearstr = self.console.getCvar('g_gear').getString()
+
+            if opt == '+' and self._weapons[key] in gearstr:
+                newgearstr = gearstr.replace(self._weapons[key], '')
+                self.console.setCvar('g_gear', newgearstr)
+                self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
+                return
+
+            if opt == '-' and self._weapons[key] not in gearstr:
+                newgearstr = '%s%s' % (gearstr, self._weapons[key])
+                self.console.setCvar('g_gear', newgearstr)
+                self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
+                return
+
+            # new gear configuration
+            # matches the current one
+            client.message('^7gear ^1not^7changed: new configuration matches the old one')
+            return
+
+        # display help text
+        client.message('^7Usage: ^3!^7pagear [+/-][%s]' % '|'.join(self._weapons.keys()))
+        client.message('^7Load defaults: ^3!^7pagear [%s]' % '|'.join(self._gears.keys()))
+
     ###############################################################################################
     #
     #    Other methods
     #
     ###############################################################################################
+
+    def printgear(self, client, cmd, gearstr=None):
+        """\
+        Print the current gear in the game chat
+        """
+        if not gearstr:
+            # if not explicitly passed get it form the server
+            gearstr = self.console.getCvar('g_gear').getString()
+
+        # Fenix: this function is actually horrible, but if we don't split
+        # manually chat lines colors are going to be fucked up: FIXME!!!
+
+        cmd.sayLoudOrPM(client, '^3current gear: ^7ber:%s^7, de:%s' % (
+                                '^2ON' if self._weapons['ber'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['de'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7colt:%s^7, glo:%s^7, lr:%s^7, m4:%s' % (
+                                '^2ON' if self._weapons['colt'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['glo'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['lr'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['m4'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7ak:%s^7, neg:%s^7, g36:%s^7, sr8:%s' % (
+                                '^2ON' if self._weapons['ak'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['neg'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['g36'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['sr8'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7psg:%s^7, hk:%s^7, spas:%s^7, mp5:%s' % (
+                                '^2ON' if self._weapons['psg'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['hk'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['spas'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['mp5'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7ump:%s^7, mac:%s^7, he:%s^7, smo:%s' % (
+                                '^2ON' if self._weapons['ump'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['mac'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['he'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['smo'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7las:%s^7, sil:%s^7, vest:%s^7, hel:%s' % (
+                                '^2ON' if self._weapons['las'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['sil'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['vest'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['hel'] not in gearstr else '^1OFF'))
+
+        cmd.sayLoudOrPM(client, '^7med:%s^7, ammo:%s^7, nvg:%s' % (
+                                '^2ON' if self._weapons['med'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['ammo'] not in gearstr else '^1OFF',
+                                '^2ON' if self._weapons['nvg'] not in gearstr else '^1OFF'))
 
     def getTime(self):
         """ just to ease automated tests """
