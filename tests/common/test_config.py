@@ -15,14 +15,7 @@ class mixin_conf(object):
         super(mixin_conf, self).setUp()
         self.conf = CfgConfigParser()
         self.p = PoweradminurtPlugin(self.console, self.conf)
-
-        # when starting the PoweradminurtPlugin expects the game server to provide a few cvar values
-        when(self.console).getCvar('timelimit').thenReturn(Cvar('timelimit', value=20))
-        when(self.console).getCvar('g_maxGameClients').thenReturn(Cvar('g_maxGameClients', value=16))
-        when(self.console).getCvar('sv_maxclients').thenReturn(Cvar('sv_maxclients', value=16))
-        when(self.console).getCvar('sv_privateClients').thenReturn(Cvar('sv_privateClients', value=0))
-        when(self.console).getCvar('g_allowvote').thenReturn(Cvar('g_allowvote', value=0))
-
+        self.init_default_cvar()
         logger = logging.getLogger('output')
         logger.setLevel(logging.INFO)
 
