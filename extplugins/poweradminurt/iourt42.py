@@ -31,6 +31,19 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     _weapons = dict(ber='F', de='G', glo='f', colt='g', spas='H', mp5='I', ump='J', mac='h', hk='K',
                     lr='L', g36='M', psg='N', sr8='Z', ak='a', neg='c', m4='e', he='O', smo='Q',
                     vest='R', hel='W', sil='U', las='V', med='T', nvg='S', ammo='X')
+    ## less likely weapon names to check if we fail to recognize a weapon with the _weapon lists
+    _weapon_aliases = {
+        ".50": "de",
+        "eag": "de",
+        "mp": "mp5",
+        "sr": "sr8",
+        "sr": "sr8",
+        "1911": "colt",
+        "kev": "vest",
+        "gog": "nvg",
+        "ext": "ammo",
+        "amm": "ammo",
+    }
 
     def __init__(self, console, config=None):
 
@@ -351,19 +364,24 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             return
 
         # add a specific weapon to the current gear string
-        if data[:1] in ('+', '-') and data[1:] in self._weapons.keys():
+        if data[:1] in ('+', '-'):
             opt = data[:1]
-            key = data[1:]
+            weapon_code = self.get_weapon_code(data[1:])
+
+            if not weapon_code:
+                client.message("could not recognize weapon/item %r" % data[1:])
+                return
+
             gearstr = self.console.getCvar('g_gear').getString()
 
-            if opt == '+' and self._weapons[key] in gearstr:
-                newgearstr = gearstr.replace(self._weapons[key], '')
+            if opt == '+' and weapon_code in gearstr:
+                newgearstr = gearstr.replace(weapon_code, '')
                 self.console.setCvar('g_gear', newgearstr)
                 self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
                 return
 
-            if opt == '-' and self._weapons[key] not in gearstr:
-                newgearstr = '%s%s' % (gearstr, self._weapons[key])
+            if opt == '-' and weapon_code not in gearstr:
+                newgearstr = '%s%s' % (gearstr, weapon_code)
                 self.console.setCvar('g_gear', newgearstr)
                 self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
                 return
@@ -436,3 +454,16 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     def getTime(self):
         """ just to ease automated tests """
         return self.console.time()
+    
+    def get_weapon_code(self, name):
+        """
+        try its best to guess the weapon code given a name
+        """
+        name_tries = [name[:length] for length in (5, 4, 3, 2)]
+        for _name in name_tries:
+            if _name in self._weapons.keys():
+                return self._weapons[_name]
+        for _name in name_tries:
+            if _name in self._weapon_aliases.keys():
+                key = self._weapon_aliases[_name]
+                return self._weapons[key]
