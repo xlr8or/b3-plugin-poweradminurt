@@ -128,8 +128,14 @@ weapon_codes = (
     ('amm', G_EXTRA_AMMO),
 )
 
+
 def all_gear_but(*args):
-    return G_ALL.translate(None, "".join(args))
+    return "".join(sorted(G_ALL.translate(None, "".join(args))))
+
+
+def only_gear(*args):
+    return G_ALL.translate(None, all_gear_but(*args))
+
 
 class Test_cmd_pagear(Iourt42TestCase):
 
@@ -241,3 +247,67 @@ pagear-gear: 20
             self.superadmin.says("!gear +%s" % weapon_name)
             # THEN
             self.assert_set_gear(all_gear_but(weapon_code), weapon_name)
+
+    def test_allow_group_nades(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear +all_nades")
+        # THEN
+        self.assert_set_gear(all_gear_but(G_SMOKE_GRENADE, G_HE_GRENADE))
+
+    def test_disallow_group_nades(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        # WHEN
+        self.superadmin.says("!gear -all_nades")
+        # THEN
+        self.assert_set_gear(only_gear(G_SMOKE_GRENADE, G_HE_GRENADE))
+
+    def test_allow_all_snipers(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear +all_snipers")
+        # THEN
+        self.assert_set_gear(all_gear_but(G_SR8, G_PSG1))
+
+    def test_disallow_all_snipers(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        # WHEN
+        self.superadmin.says("!gear -all_snipers")
+        # THEN
+        self.assert_set_gear(only_gear(G_SR8, G_PSG1))
+
+    def test_allow_all_pistols(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear +all_pistols")
+        # THEN
+        self.assert_set_gear(all_gear_but(G_BERETTA_92FS, G_50_DESERT_EAGLE, G_GLOCK, G_COLT1911))
+
+    def test_disallow_all_pistols(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        # WHEN
+        self.superadmin.says("!gear -all_pistols")
+        # THEN
+        self.assert_set_gear(only_gear(G_BERETTA_92FS, G_50_DESERT_EAGLE, G_GLOCK, G_COLT1911))
+
+    def test_allow_all_auto(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear +all_auto")
+        # THEN
+        self.assert_set_gear(all_gear_but(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))
+
+    def test_disallow_all_auto(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        # WHEN
+        self.superadmin.says("!gear -all_auto")
+        # THEN
+        self.assert_set_gear(only_gear(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))

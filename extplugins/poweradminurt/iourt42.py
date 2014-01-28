@@ -44,6 +44,12 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         "ext": "ammo",
         "amm": "ammo",
     }
+    _weapon_groups = {
+        'all_nades': 'OQ',
+        'all_snipers': 'NZ',
+        'all_pistols': 'FGfg',
+        'all_auto': 'IJLMaceh',
+    }
 
     def __init__(self, console, config=None):
 
@@ -366,25 +372,24 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         # add a specific weapon to the current gear string
         if data[:1] in ('+', '-'):
             opt = data[:1]
-            weapon_code = self.get_weapon_code(data[1:])
+            weapon_codes = self.get_weapon_code(data[1:])
 
-            if not weapon_code:
+            if not weapon_codes:
                 client.message("could not recognize weapon/item %r" % data[1:])
                 return
 
-            gearstr = self.console.getCvar('g_gear').getString()
+            new_gear_set = set(self.console.getCvar('g_gear').getString())
 
-            if opt == '+' and weapon_code in gearstr:
-                newgearstr = gearstr.replace(weapon_code, '')
-                self.console.setCvar('g_gear', newgearstr)
-                self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
-                return
+            for weapon_code in weapon_codes:
+                if opt == '+':
+                    new_gear_set.discard(weapon_code)
+                if opt == '-':
+                    new_gear_set.add(weapon_code)
 
-            if opt == '-' and weapon_code not in gearstr:
-                newgearstr = '%s%s' % (gearstr, weapon_code)
-                self.console.setCvar('g_gear', newgearstr)
-                self.printgear(client=client, cmd=cmd, gearstr=newgearstr)
-                return
+            new_gear_cvar = "".join(sorted(new_gear_set))
+            self.console.setCvar('g_gear', new_gear_cvar)
+            self.printgear(client=client, cmd=cmd, gearstr=new_gear_cvar)
+            return
 
             # new gear configuration
             # matches the current one
@@ -457,8 +462,11 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     
     def get_weapon_code(self, name):
         """
-        try its best to guess the weapon code given a name
+        try its best to guess the weapon code given a name.
+        If name is a group name, then return multiple weapon codes as a string
         """
+        if name in self._weapon_groups.keys():
+            return self._weapon_groups[name]
         name_tries = [name[:length] for length in (5, 4, 3, 2)]
         for _name in name_tries:
             if _name in self._weapons.keys():

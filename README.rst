@@ -182,7 +182,7 @@ Commands
   If you want to disable only one weapon/item instead of weapon group, have a look at the plugins weaponcontrolurt  and weaponcontrolurt42. They allow to disallow smoke grenades while allowing HE for instance, or can disallow the kelvar vest.
 
 
-!pagear (!gear) <all/none/reset/[+-]weapon/item> *for UrT 4.2*
+!pagear (!gear) <all/none/reset/[+-]weapon/item/group> *for UrT 4.2*
   set allowed/disallowed weapons or items
 
   *all* allow all weapons
@@ -197,11 +197,22 @@ Commands
 
   Accepted *weapon* and *item* names are what you would expect. I.E. *spas* for the SPAS, *de* for Desert Eagle .50, etc.
 
+  Accepted *group* names are stricly one of:
+
+    - *all_nades*: for all HE and Smoke grenades
+    - *all_snipers*: for SR8 and PSG1
+    - *all_pistols*: for Beretta 92FS, .50 Desert Eagle, Glock and Colt1911
+    - *all_auto*: for MPK5, LR300ML, Colt M4, MAC11, UMP45, G36, AK.103 and Negev LMG
 
   For instance, you can make your server a SR8 only with the two following commands::
 
     !gear none
     !gear +sr8
+
+  If you want to only allow any sniper rifles::
+
+    !gear none
+    !gear +all_snipers
 
   or maybe you just want to forbid smoke grenades::
 
@@ -512,6 +523,8 @@ Changelog
   - fix !paset when used with no cvar value
 1.17 - 2014/01/27 - Fenix
   - updated !pagear command for iourt42 game: it now works with weapon letters instead of bitmask
+1.18 - 2014/01/28 - Courgette
+  - !pagear command for iourt42 game accept weapon groups as parameter (all_snipers, all_nades, all_pistols, all_auto)
 
 
 Credit
