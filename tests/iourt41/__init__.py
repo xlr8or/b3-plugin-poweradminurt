@@ -1,4 +1,5 @@
 import sys
+from b3.cvar import Cvar
 
 if sys.version_info[:2] < (2, 7):
     import unittest2 as unittest
@@ -62,3 +63,11 @@ class Iourt41TestCase(unittest.TestCase):
         self.console.working = False
 #        sys.stdout.write("\tactive threads count : %s " % threading.activeCount())
 #        sys.stderr.write("%s\n" % threading.enumerate())
+
+    def init_default_cvar(self):
+        when(self.console).getCvar('timelimit').thenReturn(Cvar('timelimit', value=20))
+        when(self.console).getCvar('g_maxGameClients').thenReturn(Cvar('g_maxGameClients', value=16))
+        when(self.console).getCvar('sv_maxclients').thenReturn(Cvar('sv_maxclients', value=16))
+        when(self.console).getCvar('sv_privateClients').thenReturn(Cvar('sv_privateClients', value=0))
+        when(self.console).getCvar('g_allowvote').thenReturn(Cvar('g_allowvote', value=0))
+        when(self.console).getCvar('g_gear').thenReturn(Cvar('g_gear', value=''))
