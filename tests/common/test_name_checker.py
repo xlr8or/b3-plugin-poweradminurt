@@ -20,12 +20,7 @@ checkunknown: True
 checkbadnames: True
         """)
         self.p = PoweradminurtPlugin(self.console, self.conf)
-
-        when(self.console).getCvar('timelimit').thenReturn(Cvar('timelimit', value=20))
-        when(self.console).getCvar('g_maxGameClients').thenReturn(Cvar('g_maxGameClients', value=16))
-        when(self.console).getCvar('sv_maxclients').thenReturn(Cvar('sv_maxclients', value=16))
-        when(self.console).getCvar('sv_privateClients').thenReturn(Cvar('sv_privateClients', value=0))
-        when(self.console).getCvar('g_allowvote').thenReturn(Cvar('g_allowvote', value=0))
+        self.init_default_cvar()
         self.p.onLoadConfig()
         self.p.onStartup()
 

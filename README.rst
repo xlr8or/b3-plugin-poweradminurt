@@ -166,20 +166,48 @@ Commands
   Then will be re-enabled when you will use `!match off`. Also the team balancer, name checker, spec checker, heashot
   counter will be disabled.
 
-!pagear (!gear) <all/none/reset/[+-](nade|snipe|spas|pistol|auto|negev)>
+!pagear (!gear) <all/none/reset/[+-](nade|snipe|spas|pistol|auto|negev)> *for UrT 4.1*
   set allowed/disallowed weapon groups
+
+  *all* allow all weapons
+
+  *none* will only allow the knife
+
+  *reset* will put back the settings as they were before B3 started
 
   Use *+* before a weapon group to allow it
 
   Use *-* before a weapon group to disallow it
 
-  *reset* will put back the settings as they were before B3 started
+  If you want to disable only one weapon/item instead of weapon group, have a look at the plugins weaponcontrolurt  and weaponcontrolurt42. They allow to disallow smoke grenades while allowing HE for instance, or can disallow the kelvar vest.
 
-  *none* will only allow the knife
+
+!pagear (!gear) <all/none/reset/[+-]weapon/item> *for UrT 4.2*
+  set allowed/disallowed weapons or items
 
   *all* allow all weapons
 
-  If you want to disable only one weapon/item instead of weapon group, have a look at the plugins weaponcontrolurt  and weaponcontrolurt42. They allow to disallow smoke grenades while allowing HE for instance, or can disallow the kelvar vest.
+  *none* will only allow the knife
+
+  *reset* will put back the settings as they were before B3 started
+
+  Use *+* before a weapon/item to allow it
+
+  Use *-* before a weapon/item to disallow it
+
+  Accepted *weapon* and *item* names are what you would expect. I.E. *spas* for the SPAS, *de* for Desert Eagle .50, etc.
+
+
+  For instance, you can make your server a SR8 only with the two following commands::
+
+    !gear none
+    !gear +sr8
+
+  or maybe you just want to forbid smoke grenades::
+
+    !gear all
+    !gear -smoke
+
 
 !paffa (!ffa)
   switch to gametype *Free For All*
