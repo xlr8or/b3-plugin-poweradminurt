@@ -199,10 +199,10 @@ Commands
 
   Accepted *group* names are stricly one of:
 
-    - *all_nades*: for all HE and Smoke grenades
-    - *all_snipers*: for SR8 and PSG1
-    - *all_pistols*: for Beretta 92FS, .50 Desert Eagle, Glock and Colt1911
-    - *all_auto*: for MPK5, LR300ML, Colt M4, MAC11, UMP45, G36, AK.103 and Negev LMG
+  - *all_nades*: for all HE and Smoke grenades
+  - *all_snipers*: for SR8 and PSG1
+  - *all_pistols*: for Beretta 92FS, .50 Desert Eagle, Glock and Colt1911
+  - *all_auto*: for MPK5, LR300ML, Colt M4, MAC11, UMP45, G36, AK.103 and Negev LMG
 
   For instance, you can make your server a SR8 only with the two following commands::
 
