@@ -30,12 +30,13 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     _weapons = dict(ber='F', de='G', glo='f', colt='g', spas='H', mp5='I', ump='J', mac='h', hk='K',
                     lr='L', g36='M', psg='N', sr8='Z', ak='a', neg='c', m4='e', he='O', smo='Q',
                     vest='R', hel='W', sil='U', las='V', med='T', nvg='S', ammo='X')
-    ## less likely weapon names to check if we fail to recognize a weapon with the _weapon lists
+
+    # less likely weapon names to check if we fail
+    # to recognize a weapon with the _weapon lists
     _weapon_aliases = {
         ".50": "de",
         "eag": "de",
         "mp": "mp5",
-        "sr": "sr8",
         "sr": "sr8",
         "1911": "colt",
         "kev": "vest",
@@ -43,6 +44,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         "ext": "ammo",
         "amm": "ammo",
     }
+
     _weapon_groups = {
         'all_nades': 'OQ',
         'all_snipers': 'NZ',
