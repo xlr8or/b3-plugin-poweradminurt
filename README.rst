@@ -525,6 +525,8 @@ Changelog
   - updated !pagear command for iourt42 game: it now works with weapon letters instead of bitmask
 1.18 - 2014/01/28 - Courgette
   - !pagear command for iourt42 game accept weapon groups as parameter (all_snipers, all_nades, all_pistols, all_auto)
+1.19 - 2014/02/09 - Fenix
+  - code cleanup
 
 
 Credit
