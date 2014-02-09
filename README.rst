@@ -204,20 +204,17 @@ Commands
   - *all_pistols*: for Beretta 92FS, .50 Desert Eagle, Glock and Colt1911
   - *all_auto*: for MPK5, LR300ML, Colt M4, MAC11, UMP45, G36, AK.103 and Negev LMG
 
-  For instance, you can make your server a SR8 only with the two following commands::
+  For instance, you can make your server a SR8 only with the following command::
 
-    !gear none
-    !gear +sr8
+    !gear none +sr8
 
   If you want to only allow any sniper rifles::
 
-    !gear none
-    !gear +all_snipers
+    !gear none +all_snipers
 
   or maybe you just want to forbid smoke grenades::
 
-    !gear all
-    !gear -smoke
+    !gear all -smoke
 
 
 !paffa (!ffa)
@@ -527,6 +524,8 @@ Changelog
   - !pagear command for iourt42 game accept weapon groups as parameter (all_snipers, all_nades, all_pistols, all_auto)
 1.19 - 2014/02/09 - Fenix
   - code cleanup
+1.20 - 2014/02/09 - Courgette
+  - !pagear accepts multiple parameters
 
 
 Credit

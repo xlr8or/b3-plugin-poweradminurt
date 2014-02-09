@@ -134,7 +134,7 @@ def all_gear_but(*args):
 
 
 def only_gear(*args):
-    return G_ALL.translate(None, all_gear_but(*args))
+    return "".join(sorted(G_ALL.translate(None, all_gear_but(*args))))
 
 
 class Test_cmd_pagear(Iourt42TestCase):
@@ -202,7 +202,10 @@ pagear-gear: 20
         self.superadmin.says("!gear +f00")
         # THEN
         self.assertListEqual([], self.setCvar_mock.mock_calls)
-        self.assertListEqual(["could not recognize weapon/item 'f00'"], self.superadmin.message_history)
+        self.assertListEqual([
+            "could not recognize weapon/item 'f00'",
+            "gear not changed"
+        ], self.superadmin.message_history)
 
     def test_disallow_negev(self):
        # GIVEN
@@ -311,3 +314,19 @@ pagear-gear: 20
         self.superadmin.says("!gear -all_auto")
         # THEN
         self.assert_set_gear(only_gear(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))
+
+    def test_disallow_all_auto_and_no_smoke(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear all -all_auto -smoke")
+        # THEN
+        self.assert_set_gear(only_gear(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG, G_SMOKE_GRENADE))
+
+    def test_disallow_all_auto_but_lr300(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear all -all_auto +lr")
+        # THEN
+        self.assert_set_gear(only_gear(G_MP5K, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))

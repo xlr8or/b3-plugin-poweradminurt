@@ -16,6 +16,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
+import re
 
 import b3.plugin
 
@@ -359,47 +360,53 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         """
         if not data:
             self.printgear(client=client, cmd=cmd)
+            # display help text
+            client.message('^7Usage: ^3!^7pagear [+/-][%s]' % '|'.join(self._weapons.keys()))
+            client.message('^7Load weapon groups: ^3!^7pagear [+/-][%s]' % '|'.join(self._weapon_groups.keys()))
+            client.message('^7Load defaults: ^3!^7pagear [%s]' % '|'.join(self._gears.keys()))
             return
 
-        # sanitize input
-        data = data.strip().lower()
+        def update_gear(gear_set, param_data):
+            """
+            update gear_set given the param_data
 
-        # set a predefined gear
-        if data in self._gears.keys():
-            self.console.setCvar('g_gear', self._gears[data])
-            self.printgear(client=client, cmd=cmd, gearstr=self._gears[data])
-            return
-
-        # add a specific weapon to the current gear string
-        if data[:1] in ('+', '-'):
-            opt = data[:1]
-            weapon_codes = self.get_weapon_code(data[1:])
-
-            if not weapon_codes:
-                client.message("could not recognize weapon/item %r" % data[1:])
+            @param gear_set: set of letters representing the g_gear cvar value
+            @param param_data: !pagear command parameter representing a weapon/item name/preset/group
+            """
+            # set a predefined gear
+            if param_data in self._gears.keys():
+                gear_set.clear()
+                gear_set.add(self._gears[param_data])
                 return
 
-            new_gear_set = set(self.console.getCvar('g_gear').getString())
+            # add a specific weapon to the current gear string
+            if param_data[:1] in ('+', '-'):
+                opt = param_data[:1]
+                weapon_codes = self.get_weapon_code(param_data[1:])
 
-            for weapon_code in weapon_codes:
-                if opt == '+':
-                    new_gear_set.discard(weapon_code)
-                if opt == '-':
-                    new_gear_set.add(weapon_code)
+                if not weapon_codes:
+                    client.message("could not recognize weapon/item %r" % param_data[1:])
+                    return
 
-            new_gear_cvar = "".join(sorted(new_gear_set))
-            self.console.setCvar('g_gear', new_gear_cvar)
-            self.printgear(client=client, cmd=cmd, gearstr=new_gear_cvar)
+                for weapon_code in weapon_codes:
+                    if opt == '+':
+                        gear_set.discard(weapon_code)
+                    if opt == '-':
+                        gear_set.add(weapon_code)
+
+        current_gear_set = set(self.console.getCvar('g_gear').getString())
+        new_gear_set = set(current_gear_set)
+        for m in re.finditer(r"(all|none|reset|[+-][\w.]+)", data.strip().lower()):
+            update_gear(new_gear_set, m.group())
+
+        if current_gear_set == new_gear_set:
+            client.message('^7gear ^1not ^7changed')
             return
 
-            # new gear configuration
-            # matches the current one
-            client.message('^7gear ^1not^7changed: new configuration matches the old one')
-            return
+        new_gear_cvar = "".join(sorted(new_gear_set))
+        self.console.setCvar('g_gear', new_gear_cvar)
+        self.printgear(client=client, cmd=cmd, gearstr=new_gear_cvar)
 
-        # display help text
-        client.message('^7Usage: ^3!^7pagear [+/-][%s]' % '|'.join(self._weapons.keys()))
-        client.message('^7Load defaults: ^3!^7pagear [%s]' % '|'.join(self._gears.keys()))
 
     ###############################################################################################
     #
