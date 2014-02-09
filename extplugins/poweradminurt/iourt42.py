@@ -373,19 +373,21 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             @param gear_set: set of letters representing the g_gear cvar value
             @param param_data: !pagear command parameter representing a weapon/item name/preset/group
             """
+            cleaned_data = re.sub(r'\s', "", param_data)
+
             # set a predefined gear
-            if param_data in self._gears.keys():
+            if cleaned_data in self._gears.keys():
                 gear_set.clear()
-                gear_set.add(self._gears[param_data])
+                gear_set.add(self._gears[cleaned_data])
                 return
 
             # add a specific weapon to the current gear string
-            if param_data[:1] in ('+', '-'):
-                opt = param_data[:1]
-                weapon_codes = self.get_weapon_code(param_data[1:])
+            if cleaned_data[:1] in ('+', '-'):
+                opt = cleaned_data[:1]
+                weapon_codes = self.get_weapon_code(cleaned_data[1:])
 
                 if not weapon_codes:
-                    client.message("could not recognize weapon/item %r" % param_data[1:])
+                    client.message("could not recognize weapon/item %r" % cleaned_data[1:])
                     return
 
                 for weapon_code in weapon_codes:
@@ -396,7 +398,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
         current_gear_set = set(self.console.getCvar('g_gear').getString())
         new_gear_set = set(current_gear_set)
-        for m in re.finditer(r"(all|none|reset|[+-][\w.]+)", data.strip().lower()):
+        for m in re.finditer(r"(all|none|reset|[+-]\s*[\w.]+)", data.strip().lower()):
             update_gear(new_gear_set, m.group())
 
         if current_gear_set == new_gear_set:

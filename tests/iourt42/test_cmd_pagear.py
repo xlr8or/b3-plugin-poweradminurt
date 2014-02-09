@@ -231,6 +231,14 @@ pagear-gear: 20
         # THEN
         self.assert_set_gear(all_gear_but(G_NEGEV_LMG))
 
+    def test_allow_negev_long_spaced(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear + negev")
+        # THEN
+        self.assert_set_gear(all_gear_but(G_NEGEV_LMG))
+
     def test_disallow(self):
         for weapon_name, weapon_code in weapon_codes:
             # GIVEN
@@ -264,6 +272,14 @@ pagear-gear: 20
         self.given_forbidden_weapon_are(G_NONE)
         # WHEN
         self.superadmin.says("!gear -all_nades")
+        # THEN
+        self.assert_set_gear(only_gear(G_SMOKE_GRENADE, G_HE_GRENADE))
+
+    def test_disallow_group_nades_spaced(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        # WHEN
+        self.superadmin.says("!gear - all_nades")
         # THEN
         self.assert_set_gear(only_gear(G_SMOKE_GRENADE, G_HE_GRENADE))
 
@@ -323,10 +339,26 @@ pagear-gear: 20
         # THEN
         self.assert_set_gear(only_gear(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG, G_SMOKE_GRENADE))
 
+    def test_disallow_all_auto_and_no_smoke_spaced(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear all - all_auto - smoke")
+        # THEN
+        self.assert_set_gear(only_gear(G_MP5K, G_LR300ML, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG, G_SMOKE_GRENADE))
+
     def test_disallow_all_auto_but_lr300(self):
        # GIVEN
         self.given_forbidden_weapon_are(G_ALL)
         # WHEN
         self.superadmin.says("!gear all -all_auto +lr")
+        # THEN
+        self.assert_set_gear(only_gear(G_MP5K, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))
+
+    def test_disallow_all_auto_but_lr300_spaced(self):
+       # GIVEN
+        self.given_forbidden_weapon_are(G_ALL)
+        # WHEN
+        self.superadmin.says("!gear all - all_auto + lr")
         # THEN
         self.assert_set_gear(only_gear(G_MP5K, G_COLT_M4, G_MAC11, G_UMP45, G_G36, G_AK103, G_NEGEV_LMG))
