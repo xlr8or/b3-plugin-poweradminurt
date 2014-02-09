@@ -20,7 +20,6 @@
 import b3.plugin
 
 from poweradminurt.iourt41 import Poweradminurt41Plugin
-from poweradminurt import __version__, __author__
 
 import ConfigParser
 
