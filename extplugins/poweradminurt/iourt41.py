@@ -1152,8 +1152,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         }
 
         weightsum = sum(weights[key] for key in keys)
-        self.debug("score: maxstats=%s" % maxstats.__str__())
-        self.debug("score: minstats=%s" % minstats.__str__())
+        self.debug("score: maxstats=%s" % str(maxstats))
+        self.debug("score: minstats=%s" % str(minstats))
         for c in clients:
             score = 0.0
             tm = min(1.0, playerstats[c.id]['age'] / 5.0)  # reduce score for players who just joined
@@ -1269,7 +1269,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                         d += 1
             recentcontrib[c.id] = k/(1.0+d)
 
-        self.debug('recent: %s' % recentcontrib.__str__())
+        self.debug('recent: %s' % str(recentcontrib))
 
         def contribcmp(a, b):
             return cmp(recentcontrib[b.id], recentcontrib[a.id])
