@@ -526,6 +526,9 @@ Changelog
   - code cleanup
 1.20 - 2014/02/09 - Courgette
   - !pagear accepts multiple parameters
+1.21 - 2014/05/11 - Fenix
+  - fixed unresolved reference for EVT_CLIENT_RADIO
+  - removed some warnings in iourt41.py module
 
 
 Credit
