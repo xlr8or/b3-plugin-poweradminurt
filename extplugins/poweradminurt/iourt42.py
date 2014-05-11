@@ -104,7 +104,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         Register events needed
         """
         Poweradminurt41Plugin.registerEvents(self)
-        self.registerEvent(self.console.EVT_CLIENT_RADIO)
+        self.registerEvent(b3.events.EVT_CLIENT_RADIO)
 
     def onLoadConfig(self):
         """\
@@ -117,7 +117,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         """\
         Handle intercepted events
         """
-        if event.type == self.console.EVT_CLIENT_RADIO:
+        if event.type == b3.events.EVT_CLIENT_RADIO:
             self.onRadio(event)
         else:
             Poweradminurt41Plugin.onEvent(self, event)
