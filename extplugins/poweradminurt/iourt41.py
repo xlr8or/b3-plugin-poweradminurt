@@ -1152,8 +1152,8 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         }
 
         weightsum = sum(weights[key] for key in keys)
-        self.debug("score: maxstats=%s" % maxstats)
-        self.debug("score: minstats=%s" % minstats)
+        self.debug("score: maxstats=%s" % maxstats.__str__())
+        self.debug("score: minstats=%s" % minstats.__str__())
         for c in clients:
             score = 0.0
             tm = min(1.0, playerstats[c.id]['age'] / 5.0)  # reduce score for players who just joined
@@ -1269,7 +1269,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                         d += 1
             recentcontrib[c.id] = k/(1.0+d)
 
-        self.debug('recent: %s' % recentcontrib)
+        self.debug('recent: %s' % recentcontrib.__str__())
 
         def contribcmp(a, b):
             return cmp(recentcontrib[b.id], recentcontrib[a.id])
@@ -1589,6 +1589,9 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                     if absdiff < 4:
                         # difference not too big, teams may soon be fair
                         unfair = False
+                else:
+                    # FIXME (Fenix): here 'msg' is not initialized thus it produces a warning
+                    return
             else:
                 msg = '%s team is now %s' % (team, word)
 
@@ -2538,7 +2541,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
             return None
 
         if self._skill_balance_mode != 0:
-            self.debug('skill balancer is active, not performing classic teamcheck');
+            self.debug('skill balancer is active, not performing classic teamcheck')
 
         if self.console.time() > self._ignoreTill:
             self.teambalance()
@@ -2959,7 +2962,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         for p in self.console.clients.getList():
             self._playercount += 1
 
-        self.debug('Initial PlayerCount: %s' % (self._playercount))
+        self.debug('Initial PlayerCount: %s' % self._playercount)
 
         if self._oldplayercount == -1:
             self.adjustrotation(0)
