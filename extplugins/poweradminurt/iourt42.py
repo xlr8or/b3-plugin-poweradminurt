@@ -16,13 +16,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
-import re
 
+import re
 import b3.plugin
+import ConfigParser
 
 from poweradminurt.iourt41 import Poweradminurt41Plugin
-
-import ConfigParser
 
 
 class Poweradminurt42Plugin(Poweradminurt41Plugin):
@@ -261,7 +260,18 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             client.message('^7game type changed to ^4Jump')
 
         self.set_configmode('jump')
-    
+
+    def cmd_pafreeze(self, data, client, cmd=None):
+        """\
+        Change game type to Freeze Tag
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        self.console.setCvar('g_gametype', '10')
+        if client:
+            client.message('^7game type changed to ^4Freeze Tag')
+
+        self.set_configmode('freeze')
+
     def cmd_paskins(self, data, client, cmd=None):
         """\
         Set the use of client skins <on/off>

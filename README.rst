@@ -293,6 +293,9 @@ Commands specific to Urban Terror 4.2
 
 !pajump (!jump)
   change game type to *Jump Mode*
+
+!pafreeze (!freeze)
+  change game type to *Freeze Tag*
   
 !pagoto (!goto) <on/off>
   activate/deactivate the *goto* (Jump mode feature)
@@ -502,7 +505,7 @@ Changelog
 1.15 -  09/10/2013 - Courgette
   - !paident command now shows the auth name from the Frozen Sand account (UrT 4.2 only)
 1.16 - 10/11/2013 - Fenix
-  - refactored plugin syntax to match PEP8 conding style guide
+  - refactored plugin syntax to match PEP8 coding style guide
   - more verbose logging on plugin configuration
   - catch all raised exception instead of discarding them
   - correctly use config getFloat method when needed
@@ -529,6 +532,8 @@ Changelog
 1.21 - 2014/05/11 - Fenix
   - fixed unresolved reference for EVT_CLIENT_RADIO
   - removed some warnings in iourt41.py module
+1.22 - 2014/09/19 - Fenix
+  - added !pafreeze command: change gametype to Freeze Tag
 
 
 Credit
