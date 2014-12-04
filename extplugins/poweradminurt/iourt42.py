@@ -92,31 +92,31 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     _rsp_maxSpamins = 10
 
     def onStartup(self):
-        """\
+        """
         Initialize plugin settings
         """
         Poweradminurt41Plugin.onStartup(self)
         self._gears['reset'] = self.console.getCvar('g_gear').getString()
 
     def registerEvents(self):
-        """\
+        """
         Register events needed
         """
         Poweradminurt41Plugin.registerEvents(self)
-        self.registerEvent(b3.events.EVT_CLIENT_RADIO)
+        self.registerEvent(self.console.getEventID('EVT_CLIENT_RADIO'))
 
     def onLoadConfig(self):
-        """\
+        """
         Load plugin configuration
         """
         Poweradminurt41Plugin.onLoadConfig(self)
         self.loadRadioSpamProtection()
 
     def onEvent(self, event):
-        """\
+        """
         Handle intercepted events
         """
-        if event.type == b3.events.EVT_CLIENT_RADIO:
+        if event.type == self.console.getEventID('EVT_CLIENT_RADIO'):
             self.onRadio(event)
         else:
             Poweradminurt41Plugin.onEvent(self, event)
@@ -128,7 +128,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def loadRadioSpamProtection(self):
-        """\
+        """
         Setup the radio spam protection
         """
         try:
@@ -164,7 +164,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def onRadio(self, event):
-        """\
+        """
         Handle radio events
         """
         if not self._rsp_enable:
@@ -223,7 +223,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def cmd_pakill(self, data, client, cmd=None):
-        """\
+        """
         <player> - kill a player.
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -240,7 +240,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.write('smite %s' % sclient.cid)
 
     def cmd_palms(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Last Man Standing
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -251,7 +251,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('lms')
 
     def cmd_pajump(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Jump
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -262,7 +262,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('jump')
 
     def cmd_pafreeze(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Freeze Tag
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -273,7 +273,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('freeze')
 
     def cmd_paskins(self, data, client, cmd=None):
-        """\
+        """
         Set the use of client skins <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -289,7 +289,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Client skins: ^1OFF')
 
     def cmd_pafunstuff(self, data, client, cmd=None):
-        """\
+        """
         Set the use of funstuff <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -305,7 +305,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Funstuff: ^1OFF')
 
     def cmd_pagoto(self, data, client, cmd=None):
-        """\
+        """
         Set the goto <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -321,7 +321,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Goto: ^1OFF')
 
     def cmd_pastamina(self, data, client, cmd=None):
-        """\
+        """
         Set the stamina behavior <default/regain/infinite>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -340,7 +340,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Stamina mode: ^3INFINITE')
 
     def cmd_paident(self, data, client=None, cmd=None):
-        """\
+        """
         <name> - show the ip and guid and authname of a player
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -365,7 +365,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
                 self.console.formatTime(sclient.timeAdd)))
 
     def cmd_pagear(self, data, client=None, cmd=None):
-        """\
+        """
         [<gear>] - set the allowed gear on the server
         """
         if not data:
@@ -427,7 +427,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def printgear(self, client, cmd, gearstr=None):
-        """\
+        """
         Print the current gear in the game chat
         """
         if not gearstr:
