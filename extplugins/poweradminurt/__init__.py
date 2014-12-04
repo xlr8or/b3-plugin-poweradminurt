@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-__version__ = '1.22'
+__version__ = '1.23'
 __author__ = 'xlr8or, courgette'
 
 

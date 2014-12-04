@@ -308,6 +308,12 @@ Commands specific to Urban Terror 4.2
 
 !pastamina (!stamina) <default/regain/infinite>
   set the stamina behavior (Jump mode feature)
+
+!pacaptain (!captain) <player>
+  set the given client as the captain for its team (only in match mode)
+
+!pasub (!sub) <player>
+  set the given client as a substitute for its team (only in match mode)
   
 
 Other features
@@ -534,6 +540,11 @@ Changelog
   - removed some warnings in iourt41.py module
 1.22 - 2014/09/19 - Fenix
   - added !pafreeze command: change gametype to Freeze Tag
+1.23 - 2014/12/04 - Fenix
+  - added command !pacaptain: set the captain status on the given client
+  - added command !pasub: set the substitute status on the given client
+  - overridden command !paswap in iourt42 module: game server now provides a swap rcon command
+  - updated printGear method (iourt42 module) to use the new getWrap implementation
 
 
 Credit
@@ -541,7 +552,6 @@ Credit
 
 Original author : xlr8or
 Contributors : Courgette, mindriot, FSK405|Fear, naixn, BlackMamba, SGT, Fenix
-
 
 
 Contrib
