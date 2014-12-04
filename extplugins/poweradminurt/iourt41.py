@@ -243,6 +243,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
         self.registerEvent(self.console.getEventID('EVT_CLIENT_KILL'))
         self.registerEvent(self.console.getEventID('EVT_CLIENT_KILL_TEAM'))
         self.registerEvent(self.console.getEventID('EVT_CLIENT_ACTION'))
+        self.registerEvent(self.console.getEventID('EVT_GAME_MAP_CHANGE'))
 
     def onLoadConfig(self):
         """
@@ -1048,6 +1049,9 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
 
         elif event.type ==  self.console.getEventID('EVT_CLIENT_ACTION'):
             self.onAction(event.client, event.data)
+
+        elif event.type == self.console.getEventID('EVT_GAME_MAP_CHANGE'):
+            self._matchmode = self.console.getCvar('g_matchmode').getBoolean()
 
         else:
             self.dumpEvent(event)
