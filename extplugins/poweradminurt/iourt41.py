@@ -1123,7 +1123,7 @@ class Poweradminurt41Plugin(b3.plugin.Plugin):
                 'bombperf': bombperf,
             }
 
-            stats = xlrstats and xlrstats.get_PlayerStats(c)
+            stats = xlrstats.get_PlayerStats(c) if xlrstats else None
             if stats:
                 playerstats[c.id]['xkillratio'] = stats.ratio
                 head = xlrstats.get_PlayerBody(playerid=c.cid, bodypartid=0).kills
