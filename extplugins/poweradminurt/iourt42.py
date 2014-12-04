@@ -474,7 +474,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
 
     def cmd_pacaptain(self, data, client, cmd=None):
         """
-        [<player>] - Set the the given client as the captain for its team
+        [<player>] - Set the given client as the captain for its team
         (You can safely use the command without the 'pa' at the beginning)
         """
         if not self._matchmode:
@@ -499,6 +499,34 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         if sclient != client:
             team = "^1RED" if sclient.team == b3.TEAM_RED else "^4BLUE"
             sclient.message("^7You were set as captain for the %s ^7team by the Admin" % team)
+
+    def cmd_pasub(self, data, client, cmd=None):
+        """
+        [<player>] - set the given client as a substitute for its team
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not self._matchmode:
+            client.message("!pasub command is available only in match mode")
+            return
+
+        if not data:
+            sclient = client
+        else:
+            sclient = self._adminPlugin.findClientPrompt(data, client)
+            if not sclient:
+                return
+
+        if sclient.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't set substitute status" % sclient.name)
+            return
+
+        self.console.write("forcesub %s" % sclient.cid)
+
+        # only give  notice if the client is not the admin who issued the command:
+        # urban terror already display a server message when the substitute flag is changed
+        if sclient != client:
+            team = "^1RED" if sclient.team == b3.TEAM_RED else "^4BLUE"
+            sclient.message("^7You were set as substitute for the %s ^7team by the Admin" % team)
 
     ###############################################################################################
     #
