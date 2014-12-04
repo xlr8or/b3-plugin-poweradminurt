@@ -419,6 +419,57 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.setCvar('g_gear', new_gear_cvar)
         self.printgear(client=client, cmd=cmd, gearstr=new_gear_cvar)
 
+    ####
+    ## override iourt41 command since Urban Terror 4.2 now provides a /rcon swap command
+    def cmd_paswap(self, data, client, cmd=None):
+        """
+        <player1> [player2] - Swap two teams for 2 clients. If player2 is not specified, the admin
+        using the command is swapped with player1. Doesn't work with spectators (exception for calling admin).
+        """
+        # check the input
+        args = self._adminPlugin.parseUserCmd(data)
+        # check for input. If none, exist with a message.
+        if args:
+            # check if the first player exists. If none, exit.
+            client1 = self._adminPlugin.findClientPrompt(args[0], client)
+            if not client1:
+                return
+        else:
+            client.message("Invalid parameters, try !help paswap")
+            return
+
+        # if the specified player doesn't exist, exit.
+        if args[1] is not None:
+            client2 = self._adminPlugin.findClientPrompt(args[1], client)
+            if not client2:
+                return
+        else:
+            client2 = client
+
+        if client1.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't be swapped" % client1.name)
+            return
+
+        if client2.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't be swapped" % client2.name)
+            return
+
+        if client1.team == client2.team:
+            client.message("%s and %s are on the same team! - Swapped them anyway :p" % (client1.name, client2.name))
+            return
+
+        # /rcon swap <clientA> <clientB>
+        self.console.write('swap %s %s' % (client1.cid, client2.cid))
+
+        # No need to send the message twice to the switching admin :-)
+
+        if client1 != client:
+            client1.message("^4You were swapped with %s by the admin" % client2.name)
+
+        if client2 != client:
+            client2.message("^4You were swapped with %s by the admin" % client1.name)
+
+        client.message("^3Successfully swapped %s and %s" % (client1.name, client2.name))
 
     ###############################################################################################
     #
