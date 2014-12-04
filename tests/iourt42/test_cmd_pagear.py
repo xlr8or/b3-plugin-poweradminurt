@@ -176,6 +176,20 @@ pagear-gear: 20
     def assert_set_gear(self, expected_gear_value, fail_message=None):
         self.assertListEqual([call('g_gear', str(expected_gear_value))], self.setCvar_mock.mock_calls, fail_message)
 
+    def test_no_parameter(self):
+        # GIVEN
+        self.given_forbidden_weapon_are(G_NONE)
+        self.p.onStartup()
+        # WHEN
+        self.superadmin.message_history = []
+        self.superadmin.says("!gear")
+        # THEN
+        self.assertListEqual(["current gear: med:ON, vest:ON, ak:ON, de:ON, psg:ON, nvg:ON, hk:ON, mac:ON, mp5:ON, las:ON, ber:ON, ump:ON, g36:ON, neg:ON, glo:ON, smo:ON, m4:ON, lr:ON, hel:ON, spas:ON, sr8:ON, he:ON, colt:ON, ammo:ON, sil:ON",
+                              "Usage: !pagear [+/-][med|vest|ak|de|psg|nvg|hk|mac|mp5|las|ber|ump|g36|neg|glo|smo|m4|lr|hel|spas|sr8|he|colt|ammo|sil]",
+                              "Load weapon groups: !pagear [+/-][all_nades|all_auto|all_pistols|all_snipers]",
+                              "Load defaults: !pagear [reset|all|none]"],
+                              self.superadmin.message_history)
+
     def test_reset(self):
         # GIVEN
         self.given_forbidden_weapon_are("1234")
