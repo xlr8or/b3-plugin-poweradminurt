@@ -92,31 +92,31 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     _rsp_maxSpamins = 10
 
     def onStartup(self):
-        """\
+        """
         Initialize plugin settings
         """
         Poweradminurt41Plugin.onStartup(self)
         self._gears['reset'] = self.console.getCvar('g_gear').getString()
 
     def registerEvents(self):
-        """\
+        """
         Register events needed
         """
         Poweradminurt41Plugin.registerEvents(self)
-        self.registerEvent(b3.events.EVT_CLIENT_RADIO)
+        self.registerEvent(self.console.getEventID('EVT_CLIENT_RADIO'))
 
     def onLoadConfig(self):
-        """\
+        """
         Load plugin configuration
         """
         Poweradminurt41Plugin.onLoadConfig(self)
         self.loadRadioSpamProtection()
 
     def onEvent(self, event):
-        """\
+        """
         Handle intercepted events
         """
-        if event.type == b3.events.EVT_CLIENT_RADIO:
+        if event.type == self.console.getEventID('EVT_CLIENT_RADIO'):
             self.onRadio(event)
         else:
             Poweradminurt41Plugin.onEvent(self, event)
@@ -128,7 +128,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def loadRadioSpamProtection(self):
-        """\
+        """
         Setup the radio spam protection
         """
         try:
@@ -164,7 +164,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def onRadio(self, event):
-        """\
+        """
         Handle radio events
         """
         if not self._rsp_enable:
@@ -223,7 +223,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def cmd_pakill(self, data, client, cmd=None):
-        """\
+        """
         <player> - kill a player.
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -240,7 +240,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.write('smite %s' % sclient.cid)
 
     def cmd_palms(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Last Man Standing
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -251,7 +251,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('lms')
 
     def cmd_pajump(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Jump
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -262,7 +262,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('jump')
 
     def cmd_pafreeze(self, data, client, cmd=None):
-        """\
+        """
         Change game type to Freeze Tag
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -273,7 +273,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.set_configmode('freeze')
 
     def cmd_paskins(self, data, client, cmd=None):
-        """\
+        """
         Set the use of client skins <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -289,7 +289,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Client skins: ^1OFF')
 
     def cmd_pafunstuff(self, data, client, cmd=None):
-        """\
+        """
         Set the use of funstuff <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -305,7 +305,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Funstuff: ^1OFF')
 
     def cmd_pagoto(self, data, client, cmd=None):
-        """\
+        """
         Set the goto <on/off>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -321,7 +321,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Goto: ^1OFF')
 
     def cmd_pastamina(self, data, client, cmd=None):
-        """\
+        """
         Set the stamina behavior <default/regain/infinite>
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -340,7 +340,7 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
             self.console.say('^7Stamina mode: ^3INFINITE')
 
     def cmd_paident(self, data, client=None, cmd=None):
-        """\
+        """
         <name> - show the ip and guid and authname of a player
         (You can safely use the command without the 'pa' at the beginning)
         """
@@ -365,8 +365,9 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
                 self.console.formatTime(sclient.timeAdd)))
 
     def cmd_pagear(self, data, client=None, cmd=None):
-        """\
+        """
         [<gear>] - set the allowed gear on the server
+        (You can safely use the command without the 'pa' at the beginning)
         """
         if not data:
             self.printgear(client=client, cmd=cmd)
@@ -419,6 +420,113 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
         self.console.setCvar('g_gear', new_gear_cvar)
         self.printgear(client=client, cmd=cmd, gearstr=new_gear_cvar)
 
+    ####
+    ## override iourt41 command since Urban Terror 4.2 now provides a /rcon swap command
+    def cmd_paswap(self, data, client, cmd=None):
+        """
+        <player1> [player2] - Swap two teams for 2 clients. If player2 is not specified, the admin
+        using the command is swapped with player1. Doesn't work with spectators (exception for calling admin).
+        """
+        # check the input
+        args = self._adminPlugin.parseUserCmd(data)
+        # check for input. If none, exist with a message.
+        if args:
+            # check if the first player exists. If none, exit.
+            client1 = self._adminPlugin.findClientPrompt(args[0], client)
+            if not client1:
+                return
+        else:
+            client.message("Invalid parameters, try !help paswap")
+            return
+
+        # if the specified player doesn't exist, exit.
+        if args[1] is not None:
+            client2 = self._adminPlugin.findClientPrompt(args[1], client)
+            if not client2:
+                return
+        else:
+            client2 = client
+
+        if client1.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't be swapped" % client1.name)
+            return
+
+        if client2.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't be swapped" % client2.name)
+            return
+
+        if client1.team == client2.team:
+            client.message("%s and %s are on the same team! - Swapped them anyway :p" % (client1.name, client2.name))
+            return
+
+        # /rcon swap <clientA> <clientB>
+        self.console.write('swap %s %s' % (client1.cid, client2.cid))
+
+        # No need to send the message twice to the switching admin :-)
+
+        if client1 != client:
+            client1.message("^4You were swapped with %s by the admin" % client2.name)
+
+        if client2 != client:
+            client2.message("^4You were swapped with %s by the admin" % client1.name)
+
+        client.message("^3Successfully swapped %s and %s" % (client1.name, client2.name))
+
+    def cmd_pacaptain(self, data, client, cmd=None):
+        """
+        [<player>] - Set the given client as the captain for its team
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not self._matchmode:
+            client.message("!pacaptain command is available only in match mode")
+            return
+
+        if not data:
+            sclient = client
+        else:
+            sclient = self._adminPlugin.findClientPrompt(data, client)
+            if not sclient:
+                return
+
+        if sclient.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't set captain status" % sclient.name)
+            return
+
+        self.console.write("forcecaptain %s" % sclient.cid)
+
+        # only give  notice if the client is not the admin who issued the command:
+        # urban terror already display a server message when the captain flag is changed
+        if sclient != client:
+            team = "^1RED" if sclient.team == b3.TEAM_RED else "^4BLUE"
+            sclient.message("^7You were set as captain for the %s ^7team by the Admin" % team)
+
+    def cmd_pasub(self, data, client, cmd=None):
+        """
+        [<player>] - set the given client as a substitute for its team
+        (You can safely use the command without the 'pa' at the beginning)
+        """
+        if not self._matchmode:
+            client.message("!pasub command is available only in match mode")
+            return
+
+        if not data:
+            sclient = client
+        else:
+            sclient = self._adminPlugin.findClientPrompt(data, client)
+            if not sclient:
+                return
+
+        if sclient.team == b3.TEAM_SPEC:
+            client.message("%s is a spectator! - Can't set substitute status" % sclient.name)
+            return
+
+        self.console.write("forcesub %s" % sclient.cid)
+
+        # only give  notice if the client is not the admin who issued the command:
+        # urban terror already display a server message when the substitute flag is changed
+        if sclient != client:
+            team = "^1RED" if sclient.team == b3.TEAM_RED else "^4BLUE"
+            sclient.message("^7You were set as substitute for the %s ^7team by the Admin" % team)
 
     ###############################################################################################
     #
@@ -427,54 +535,18 @@ class Poweradminurt42Plugin(Poweradminurt41Plugin):
     ###############################################################################################
 
     def printgear(self, client, cmd, gearstr=None):
-        """\
+        """
         Print the current gear in the game chat
         """
         if not gearstr:
             # if not explicitly passed get it form the server
             gearstr = self.console.getCvar('g_gear').getString()
 
-        # Fenix: this function is actually horrible, but if we don't split
-        # manually chat lines colors are going to be fucked up: FIXME!!!
+        lines = []
+        for key in self._weapons.keys():
+            lines.append('%s:%s' % (key, '^2ON' if self._weapons[key] not in gearstr else '^1OFF'))
 
-        cmd.sayLoudOrPM(client, '^3current gear: ^7ber:%s^7, de:%s' % (
-                                '^2ON' if self._weapons['ber'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['de'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7colt:%s^7, glo:%s^7, lr:%s^7, m4:%s' % (
-                                '^2ON' if self._weapons['colt'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['glo'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['lr'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['m4'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7ak:%s^7, neg:%s^7, g36:%s^7, sr8:%s' % (
-                                '^2ON' if self._weapons['ak'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['neg'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['g36'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['sr8'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7psg:%s^7, hk:%s^7, spas:%s^7, mp5:%s' % (
-                                '^2ON' if self._weapons['psg'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['hk'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['spas'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['mp5'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7ump:%s^7, mac:%s^7, he:%s^7, smo:%s' % (
-                                '^2ON' if self._weapons['ump'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['mac'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['he'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['smo'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7las:%s^7, sil:%s^7, vest:%s^7, hel:%s' % (
-                                '^2ON' if self._weapons['las'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['sil'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['vest'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['hel'] not in gearstr else '^1OFF'))
-
-        cmd.sayLoudOrPM(client, '^7med:%s^7, ammo:%s^7, nvg:%s' % (
-                                '^2ON' if self._weapons['med'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['ammo'] not in gearstr else '^1OFF',
-                                '^2ON' if self._weapons['nvg'] not in gearstr else '^1OFF'))
+        cmd.sayLoudOrPM(client, '^3current gear: ^7%s' % '^7, '.join(lines))
 
     def getTime(self):
         """ just to ease automated tests """
