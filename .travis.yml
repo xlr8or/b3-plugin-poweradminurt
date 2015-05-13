@@ -1,8 +1,6 @@
 # TravisCI config file. See http://travis-ci.org
 language: python
-python:
-  - 2.6
-  - 2.7
+python: 2.7
 
 env:
   - B3_REPO='git+git://github.com/BigBrotherBot/big-brother-bot.git@master#egg=b3'
