@@ -25,12 +25,17 @@ Installation
 
 **b3.xml**
 
-    <plugin name="poweradminurt" config="@conf/plugin_poweradminurt.ini" />
+.. code:: xml
+
+  <plugin name="poweradminurt" config="@conf/plugin_poweradminurt.ini" />
+
 
 **b3.ini**
 
-    [plugins]
-    poweradminurt: @conf/plugin_poweradminurt.ini
+.. code:: ini
+
+  [plugins]
+  poweradminurt: @conf/plugin_poweradminurt.ini
 
 
 Commands
