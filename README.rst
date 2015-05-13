@@ -19,11 +19,18 @@ Requirements
 Installation
 ------------
 
-- copy the directory extplugins/poweradminurt/ into your b3/extplugins/ directory
-- copy the files from the conf folder into the folder that contains your main b3.xml config file
+- copy the directory `poweradminurt/` into your `b3/extplugins/` directory
+- copy the files from the `poweradminurt/conf` folder into the folder that contains your main b3.ini (or b3.xml) config file
 - add to the plugins section of your main b3 config file::
 
-  <plugin name="poweradminurt" config="@conf/plugin_poweradminurt.ini" />
+**b3.xml**
+
+    <plugin name="poweradminurt" config="@conf/plugin_poweradminurt.ini" />
+
+**b3.ini**
+
+    [plugins]
+    poweradminurt: @conf/plugin_poweradminurt.ini
 
 
 Commands
